@@ -2,6 +2,35 @@ from pydantic import BaseModel, Field
 
 
 # ============================================================
+# EXTRACTION CONFIDENCE
+# ============================================================
+
+class ExtractionConfidence(BaseModel):
+    """
+    Confidence scores for extracted information.
+    Values must be between 0 and 1.
+    """
+
+    overall: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0
+    )
+
+    metadata: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0
+    )
+
+    activities: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0
+    )
+
+
+# ============================================================
 # EXTRACTION METADATA
 # ============================================================
 
@@ -11,8 +40,10 @@ class ExtractionMetadata(BaseModel):
     """
 
     source_type: str | None = None
+
     processing_method: str | None = None
-    confidence: float | None = Field(
+
+    confidence_score: float | None = Field(
         default=None,
         ge=0.0,
         le=1.0
@@ -29,51 +60,12 @@ class ExtractionEvidence(BaseModel):
     """
 
     progress: str | None = None
+
     quantity: str | None = None
+
     status: str | None = None
+
     delay: str | None = None
-
-
-# ============================================================
-# EXTRACTION CONFIDENCE
-# ============================================================
-
-class ExtractionConfidence(BaseModel):
-    """
-    Confidence assigned to extracted fields.
-
-    Values range from 0.0 to 1.0.
-    """
-
-    progress: float | None = Field(
-        default=None,
-        ge=0.0,
-        le=1.0
-    )
-
-    quantity: float | None = Field(
-        default=None,
-        ge=0.0,
-        le=1.0
-    )
-
-    status: float | None = Field(
-        default=None,
-        ge=0.0,
-        le=1.0
-    )
-
-    delay: float | None = Field(
-        default=None,
-        ge=0.0,
-        le=1.0
-    )
-
-    overall: float | None = Field(
-        default=None,
-        ge=0.0,
-        le=1.0
-    )
 
 
 # ============================================================

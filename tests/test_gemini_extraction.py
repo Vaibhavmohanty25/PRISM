@@ -1,3 +1,5 @@
+from unittest.mock import MagicMock, patch
+
 from app.core.config import settings
 from app.services.extraction_service import ExtractionService
 
@@ -23,20 +25,51 @@ def test_gemini_extraction():
     The activity is currently in progress.
     """
 
-    result = service.extract_progress_report(
-        source_text
-    )
+    # --------------------------------------------------------
+    # Mock Gemini API response
+    # --------------------------------------------------------
 
-    print("\nExtracted result:")
-    print(
-        result.model_dump_json(
-            indent=2
+    mock_interaction = MagicMock()
+
+    mock_interaction.output_text = """
+    {
+        "activities": [
+            {
+                "activity_name": "Foundation RCC work",
+                "quantity_completed": 120,
+                "unit": "cubic meters",
+                "progress_percentage": 70,
+                "status": "In Progress",
+                "issues": [
+                    "Heavy rainfall"
+                ],
+                "delay_reason": "Heavy rainfall",
+                "delay_duration_hours": 3
+            }
+        ],
+        "general_issues": []
+    }
+    """
+
+    with patch.object(
+        service.client.interactions,
+        "create",
+        return_value=mock_interaction,
+    ) as mock_create:
+
+        result = service.extract_progress_report(
+            source_text
         )
-    )
 
-    # ---------------------------------------------
+    # --------------------------------------------------------
+    # Verify Gemini was called
+    # --------------------------------------------------------
+
+    mock_create.assert_called_once()
+
+    # --------------------------------------------------------
     # Metadata validation
-    # ---------------------------------------------
+    # --------------------------------------------------------
 
     assert result.project_name == (
         "Delhi Metro Extension"
@@ -48,9 +81,9 @@ def test_gemini_extraction():
 
     assert result.location == "Block A"
 
-    # ---------------------------------------------
+    # --------------------------------------------------------
     # Activity validation
-    # ---------------------------------------------
+    # --------------------------------------------------------
 
     assert len(result.activities) == 1
 
@@ -71,9 +104,9 @@ def test_gemini_extraction():
 
     assert activity.status == "In Progress"
 
-    # ---------------------------------------------
+    # --------------------------------------------------------
     # Issue / delay validation
-    # ---------------------------------------------
+    # --------------------------------------------------------
 
     assert "Heavy rainfall" in activity.issues
 
