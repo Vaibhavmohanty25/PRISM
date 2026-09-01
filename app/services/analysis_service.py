@@ -3,7 +3,9 @@ from fastapi import Request
 from app.schemas.project_data import (
     ActivityInsight,
     ActivityHistory,
+    ActivityScheduleImpact,
     ProjectInsight,
+    ProjectScheduleImpact,
     ProgressReport,
     RiskResult,
     TrendResult,
@@ -11,6 +13,7 @@ from app.schemas.project_data import (
 from app.services.progress_tracker import ProgressTracker
 from app.services.risk_analyzer import RiskAnalyzer
 from app.services.insight_analyzer import InsightAnalyzer
+from app.services.schedule_impact_analyzer import ScheduleImpactAnalyzer
 from app.services.trend_analyzer import TrendAnalyzer
 
 
@@ -25,6 +28,9 @@ class AnalysisService:
             self.tracker,
             self.trend_analyzer,
             self.risk_analyzer,
+        )
+        self.schedule_impact_analyzer = ScheduleImpactAnalyzer(
+            self.tracker,
         )
 
     def record_report(self, report: ProgressReport) -> None:
@@ -90,6 +96,24 @@ class AnalysisService:
         project_name: str | None,
     ) -> ProjectInsight | None:
         return self.insight_analyzer.analyze_project(project_name)
+
+    def analyze_activity_schedule_impact(
+        self,
+        project_name: str | None,
+        activity_name: str,
+    ) -> ActivityScheduleImpact | None:
+        return self.schedule_impact_analyzer.analyze_activity(
+            project_name,
+            activity_name,
+        )
+
+    def analyze_project_schedule_impact(
+        self,
+        project_name: str | None,
+    ) -> ProjectScheduleImpact | None:
+        return self.schedule_impact_analyzer.analyze_project(
+            project_name,
+        )
 
 
 def get_analysis_service(request: Request) -> AnalysisService:

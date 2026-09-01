@@ -3,6 +3,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from app.schemas.project_data import (
     ActivityInsight,
     ActivityHistory,
+    ActivityScheduleImpact,
+    ProjectScheduleImpact,
     ProjectInsight,
     RiskResult,
     TrendResult,
@@ -165,6 +167,50 @@ def get_activity_insight(
 ) -> ActivityInsight:
     _require_project(service, project_name)
     result = service.analyze_activity_insight(
+        project_name,
+        activity_name,
+    )
+
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Unknown activity: {activity_name}",
+        )
+
+    return result
+
+
+@router.get(
+    "/projects/{project_name}/schedule-impact",
+    response_model=ProjectScheduleImpact,
+)
+def get_project_schedule_impact(
+    project_name: str,
+    service: AnalysisService = Depends(get_analysis_service),
+) -> ProjectScheduleImpact:
+    _require_project(service, project_name)
+    result = service.analyze_project_schedule_impact(project_name)
+
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Unknown project: {project_name}",
+        )
+
+    return result
+
+
+@router.get(
+    "/projects/{project_name}/activities/{activity_name}/schedule-impact",
+    response_model=ActivityScheduleImpact,
+)
+def get_activity_schedule_impact(
+    project_name: str,
+    activity_name: str,
+    service: AnalysisService = Depends(get_analysis_service),
+) -> ActivityScheduleImpact:
+    _require_project(service, project_name)
+    result = service.analyze_activity_schedule_impact(
         project_name,
         activity_name,
     )
