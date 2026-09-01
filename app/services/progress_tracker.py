@@ -1,3 +1,5 @@
+import json
+
 from app.schemas.project_data import (
     ActivityHistory,
     ActivitySnapshot,
@@ -36,6 +38,49 @@ class ProgressTracker:
             dict[str, dict[str, object]],
         ] = {}
         self._submission_counters: dict[str, int] = {}
+        self._recorded_snapshot_keys: set[tuple[str, ...]] = set()
+
+    @staticmethod
+    def _report_identity(
+        report: ProgressReport,
+    ) -> tuple[str, ...]:
+        activity_names = tuple(
+            sorted(
+                normalize_activity_name(activity.activity_name)
+                for activity in report.activities
+                if activity.activity_name
+            )
+        )
+        general_issues = tuple(
+            sorted(
+                issue.strip().casefold()
+                for issue in report.general_issues
+                if issue.strip()
+            )
+        )
+
+        identity = (
+            (report.project_name or "").strip().casefold(),
+            (report.report_date or "").strip().casefold(),
+            (report.contractor or "").strip().casefold(),
+            (report.location or "").strip().casefold(),
+            repr(activity_names),
+            repr(general_issues),
+        )
+
+        if not (report.report_date or "").strip():
+            undated_payload = report.model_dump(
+                mode="json",
+                exclude={"extraction_metadata"},
+            )
+            identity += (
+                json.dumps(
+                    undated_payload,
+                    sort_keys=True,
+                ),
+            )
+
+        return identity
 
     def record(
         self,
@@ -50,6 +95,8 @@ class ProgressTracker:
         self._submission_counters[key] += 1
         submission_order = self._submission_counters[key]
 
+        report_identity = self._report_identity(report)
+
         for activity in report.activities:
             if not activity.activity_name:
                 continue
@@ -58,6 +105,13 @@ class ProgressTracker:
             activity_key = normalize_activity_name(
                 display_name
             )
+
+            snapshot_key = report_identity + (activity_key,)
+
+            if snapshot_key in self._recorded_snapshot_keys:
+                continue
+
+            self._recorded_snapshot_keys.add(snapshot_key)
 
             snapshot = ActivitySnapshot(
                 report_date=report.report_date,
