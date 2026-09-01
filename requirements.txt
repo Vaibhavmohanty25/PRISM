@@ -2,9 +2,14 @@ fastapi
 uvicorn
 python-multipart
 pydantic
+pydantic-settings
 google-genai
 PyMuPDF
+pandas
+numpy
+opencv-python
 openpyxl
+xlrd
 easyocr
 Pillow
 pytest
