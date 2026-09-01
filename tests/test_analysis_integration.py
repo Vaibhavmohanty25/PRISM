@@ -138,7 +138,7 @@ def test_upload_records_extracted_report_once(tmp_path, monkeypatch):
             "Foundation%20RCC%20work/history"
         )
 
-    assert first.status_code == 200
-    assert second.status_code == 200
+    assert first.status_code == 201
+    assert second.status_code == 201
     assert history.status_code == 200
     assert len(history.json()["snapshots"]) == 1

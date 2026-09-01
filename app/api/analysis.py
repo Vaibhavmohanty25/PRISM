@@ -11,6 +11,7 @@ from app.services.analysis_service import (
     AnalysisService,
     get_analysis_service,
 )
+from app.schemas.api import ProjectsResponse
 
 
 router = APIRouter(
@@ -30,10 +31,10 @@ def _require_project(
         )
 
 
-@router.get("/projects")
+@router.get("/projects", response_model=ProjectsResponse)
 def get_projects(
     service: AnalysisService = Depends(get_analysis_service),
-) -> dict[str, list[str]]:
+) -> ProjectsResponse:
     return {"projects": service.get_projects()}
 
 
