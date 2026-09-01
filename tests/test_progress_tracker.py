@@ -38,6 +38,109 @@ def _activity(
     )
 
 
+def test_distinct_dated_reports_are_not_deduplicated():
+    tracker = ProgressTracker()
+
+    tracker.record(
+        _make_report(
+            project_name="Metro Project",
+            report_date="1 June 2025",
+            activities=[_activity("Foundation RCC work", 35)],
+        )
+    )
+    tracker.record(
+        _make_report(
+            project_name="Metro Project",
+            report_date="1 June 2025",
+            activities=[_activity("Foundation RCC work", 48)],
+        )
+    )
+
+    history = tracker.get_activity_history(
+        "Metro Project",
+        "Foundation RCC work",
+    )
+
+    assert history is not None
+    assert len(history.snapshots) == 2
+
+
+def test_distinct_unparseable_dated_reports_are_not_deduplicated():
+    tracker = ProgressTracker()
+
+    tracker.record(
+        _make_report(
+            project_name="Metro Project",
+            report_date="date unavailable",
+            activities=[_activity("Foundation RCC work", 35)],
+        )
+    )
+    tracker.record(
+        _make_report(
+            project_name="Metro Project",
+            report_date="date unavailable",
+            activities=[_activity("Foundation RCC work", 48, quantity=12)],
+        )
+    )
+
+    history = tracker.get_activity_history(
+        "Metro Project",
+        "Foundation RCC work",
+    )
+
+    assert history is not None
+    assert len(history.snapshots) == 2
+
+
+def test_exact_duplicate_report_is_still_deduplicated():
+    tracker = ProgressTracker()
+    report = _make_report(
+        project_name="Metro Project",
+        report_date="1 June 2025",
+        activities=[_activity("Foundation RCC work", 35)],
+    )
+
+    tracker.record(report)
+    tracker.record(report)
+
+    history = tracker.get_activity_history(
+        "Metro Project",
+        "Foundation RCC work",
+    )
+
+    assert history is not None
+    assert len(history.snapshots) == 1
+
+
+def test_duplicate_protection_is_deterministic():
+    first_report = _make_report(
+        project_name=" Metro Project ",
+        report_date=" 1 June 2025 ",
+        activities=[_activity("Foundation RCC work", 35)],
+    )
+    second_report = _make_report(
+        project_name="Metro Project",
+        report_date="1 June 2025",
+        activities=[_activity("foundation rcc work", 35)],
+    )
+
+    assert ProgressTracker._report_identity(first_report) == (
+        ProgressTracker._report_identity(second_report)
+    )
+
+    tracker = ProgressTracker()
+    tracker.record(first_report)
+    tracker.record(second_report)
+
+    history = tracker.get_activity_history(
+        "Metro Project",
+        "Foundation RCC work",
+    )
+
+    assert history is not None
+    assert len(history.snapshots) == 1
+
+
 def test_record_multiple_reports_for_one_project():
     tracker = ProgressTracker()
 

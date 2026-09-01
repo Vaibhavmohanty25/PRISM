@@ -1,4 +1,5 @@
 import json
+from typing import Any
 
 from app.schemas.project_data import (
     ActivityHistory,
@@ -44,43 +45,48 @@ class ProgressTracker:
     def _report_identity(
         report: ProgressReport,
     ) -> tuple[str, ...]:
-        activity_names = tuple(
-            sorted(
-                normalize_activity_name(activity.activity_name)
-                for activity in report.activities
-                if activity.activity_name
-            )
+        payload = report.model_dump(
+            mode="json",
+            exclude={"extraction_metadata"},
         )
-        general_issues = tuple(
-            sorted(
-                issue.strip().casefold()
-                for issue in report.general_issues
-                if issue.strip()
-            )
+        canonical_payload = ProgressTracker._canonicalize(payload)
+
+        return (
+            json.dumps(
+                canonical_payload,
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=False,
+            ),
         )
 
-        identity = (
-            (report.project_name or "").strip().casefold(),
-            (report.report_date or "").strip().casefold(),
-            (report.contractor or "").strip().casefold(),
-            (report.location or "").strip().casefold(),
-            repr(activity_names),
-            repr(general_issues),
-        )
+    @staticmethod
+    def _canonicalize(value: Any) -> Any:
+        if isinstance(value, dict):
+            return {
+                key: ProgressTracker._canonicalize(item)
+                for key, item in sorted(value.items())
+            }
 
-        if not (report.report_date or "").strip():
-            undated_payload = report.model_dump(
-                mode="json",
-                exclude={"extraction_metadata"},
-            )
-            identity += (
-                json.dumps(
-                    undated_payload,
+        if isinstance(value, list):
+            canonical_items = [
+                ProgressTracker._canonicalize(item)
+                for item in value
+            ]
+            return sorted(
+                canonical_items,
+                key=lambda item: json.dumps(
+                    item,
                     sort_keys=True,
+                    separators=(",", ":"),
+                    ensure_ascii=False,
                 ),
             )
 
-        return identity
+        if isinstance(value, str):
+            return value.strip().casefold()
+
+        return value
 
     def record(
         self,
