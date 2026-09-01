@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -141,3 +143,150 @@ class ProgressReport(BaseModel):
     )
 
     extraction_metadata: ExtractionMetadata | None = None
+
+
+# ============================================================
+# PROGRESS INTELLIGENCE (PHASE 2)
+# ============================================================
+
+TrendClassification = Literal[
+    "improving",
+    "stalled",
+    "declining",
+    "insufficient_data",
+]
+
+
+class ActivitySnapshot(BaseModel):
+    """
+    A point-in-time record of one activity from a single report.
+    """
+
+    report_date: str | None = None
+
+    submission_order: int = Field(
+        ge=1,
+        description=(
+            "Monotonic order of report ingestion when dates "
+            "are missing or unparseable."
+        ),
+    )
+
+    progress_percentage: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=100.0,
+    )
+
+    quantity_completed: float | None = None
+
+    unit: str | None = None
+
+    status: str | None = None
+
+    issues: list[str] = Field(
+        default_factory=list
+    )
+
+    delay_reason: str | None = None
+
+    delay_duration_hours: float | None = None
+
+
+class ActivityHistory(BaseModel):
+    """
+    Chronological progress history for one activity within a project.
+    """
+
+    project_name: str
+
+    activity_name: str
+
+    snapshots: list[ActivitySnapshot] = Field(
+        default_factory=list
+    )
+
+
+class TrendResult(BaseModel):
+    """
+    Deterministic trend analysis for one activity history.
+    """
+
+    project_name: str
+
+    activity_name: str
+
+    trend: TrendClassification
+
+    snapshot_count: int = Field(ge=0)
+
+    progress_deltas: list[float] = Field(
+        default_factory=list
+    )
+
+    average_progress_delta: float | None = None
+
+    average_velocity_per_day: float | None = None
+
+    first_progress: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=100.0,
+    )
+
+    last_progress: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=100.0,
+    )
+
+
+RiskLevel = Literal[
+    "low",
+    "medium",
+    "high",
+    "insufficient_data",
+]
+
+
+class RiskResult(BaseModel):
+    """
+    Deterministic observed-risk assessment for one activity.
+
+    The risk score is a rule-based signal score, not a probability and
+    not a prediction of completion date.
+    """
+
+    project_name: str
+
+    activity_name: str
+
+    risk_level: RiskLevel
+
+    risk_score: int = Field(
+        ge=0,
+        le=100,
+        description="Rule-based observed-risk score, not a probability.",
+    )
+
+    risk_signals: list[str] = Field(
+        default_factory=list
+    )
+
+    repeated_delays: list[str] = Field(
+        default_factory=list
+    )
+
+    repeated_issues: list[str] = Field(
+        default_factory=list
+    )
+
+    trend: TrendClassification
+
+    average_velocity_per_day: float | None = None
+
+    progress_deltas: list[float] = Field(
+        default_factory=list
+    )
+
+    snapshot_count: int = Field(ge=0)
