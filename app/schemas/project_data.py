@@ -363,3 +363,40 @@ class ProjectInsight(BaseModel):
     activities: list[ActivityInsight] = Field(
         default_factory=list
     )
+
+
+class ActivityScheduleImpact(BaseModel):
+    """Deterministic summary of explicitly reported delay observations."""
+
+    project_name: str
+
+    activity_name: str
+
+    status: Literal[
+        "available",
+        "insufficient_data",
+    ]
+
+    delay_observation_count: int = Field(ge=0)
+
+    repeated_delay_reasons: list[str] = Field(
+        default_factory=list
+    )
+
+    latest_delay_hours: float | None = None
+
+    latest_delay_reason: str | None = None
+
+    progress_trend: TrendClassification
+
+    summary: str
+
+
+class ProjectScheduleImpact(BaseModel):
+    """Activity-level observed schedule-impact results for one project."""
+
+    project_name: str
+
+    activities: list[ActivityScheduleImpact] = Field(
+        default_factory=list
+    )
