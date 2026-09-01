@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.schemas.project_data import (
+    ActivityInsight,
     ActivityHistory,
+    ProjectInsight,
     RiskResult,
     TrendResult,
 )
@@ -118,6 +120,50 @@ def get_activity_risk(
 ) -> RiskResult:
     _require_project(service, project_name)
     result = service.analyze_activity_risk(
+        project_name,
+        activity_name,
+    )
+
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Unknown activity: {activity_name}",
+        )
+
+    return result
+
+
+@router.get(
+    "/projects/{project_name}/insights",
+    response_model=ProjectInsight,
+)
+def get_project_insights(
+    project_name: str,
+    service: AnalysisService = Depends(get_analysis_service),
+) -> ProjectInsight:
+    _require_project(service, project_name)
+    result = service.analyze_project_insight(project_name)
+
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Unknown project: {project_name}",
+        )
+
+    return result
+
+
+@router.get(
+    "/projects/{project_name}/activities/{activity_name}/insight",
+    response_model=ActivityInsight,
+)
+def get_activity_insight(
+    project_name: str,
+    activity_name: str,
+    service: AnalysisService = Depends(get_analysis_service),
+) -> ActivityInsight:
+    _require_project(service, project_name)
+    result = service.analyze_activity_insight(
         project_name,
         activity_name,
     )
