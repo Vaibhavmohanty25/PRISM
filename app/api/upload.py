@@ -2,8 +2,19 @@ import os
 import uuid
 import shutil
 
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import (
+    APIRouter,
+    Depends,
+    UploadFile,
+    File,
+    HTTPException,
+)
 
+from app.schemas.project_data import ProgressReport
+from app.services.analysis_service import (
+    AnalysisService,
+    get_analysis_service,
+)
 from app.services.file_router import process_file
 
 
@@ -27,7 +38,12 @@ ALLOWED_EXTENSIONS = {
 
 
 @router.post("/upload")
-async def upload_file(file: UploadFile = File(...)):
+async def upload_file(
+    file: UploadFile = File(...),
+    analysis_service: AnalysisService = Depends(
+        get_analysis_service
+    ),
+):
 
     # Validate filename
     if not file.filename:
@@ -67,6 +83,14 @@ async def upload_file(file: UploadFile = File(...)):
     # Process the uploaded file
     try:
         processed_result = process_file(file_path)
+
+        extracted_data = processed_result.get(
+            "extracted_data"
+        )
+        if isinstance(extracted_data, dict) and "activities" in extracted_data:
+            analysis_service.record_report(
+                ProgressReport.model_validate(extracted_data)
+            )
 
     except Exception as e:
         raise HTTPException(

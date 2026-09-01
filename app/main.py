@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 
+from app.api.analysis import router as analysis_router
 from app.api.upload import router as upload_router
+from app.services.analysis_service import AnalysisService
 
 
 app = FastAPI(
@@ -11,6 +13,8 @@ app = FastAPI(
 
 
 app.include_router(upload_router)
+app.include_router(analysis_router)
+app.state.analysis_service = AnalysisService()
 
 
 @app.get("/")
