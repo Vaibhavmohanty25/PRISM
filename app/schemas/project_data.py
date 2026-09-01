@@ -290,3 +290,76 @@ class RiskResult(BaseModel):
     )
 
     snapshot_count: int = Field(ge=0)
+
+
+InsightStatus = Literal[
+    "available",
+    "insufficient_data",
+]
+
+InsightType = Literal[
+    "declining_progress",
+    "stalled_activity",
+    "low_velocity",
+    "repeated_delay",
+    "repeated_issue",
+]
+
+InsightPriority = Literal[
+    "low",
+    "medium",
+    "high",
+]
+
+
+class InsightFinding(BaseModel):
+    """Deterministic explanation of one observed project signal."""
+
+    finding_type: InsightType
+
+    priority: InsightPriority
+
+    title: str
+
+    explanation: str
+
+    factual_evidence: list[str] = Field(
+        default_factory=list
+    )
+
+    recommendation: str | None = None
+
+
+class ActivityInsight(BaseModel):
+    """Human-readable deterministic insight for one activity."""
+
+    project_name: str
+
+    activity_name: str
+
+    status: InsightStatus
+
+    risk_level: RiskLevel
+
+    risk_score: int = Field(
+        ge=0,
+        le=100,
+    )
+
+    trend: TrendClassification
+
+    findings: list[InsightFinding] = Field(
+        default_factory=list
+    )
+
+    data_note: str | None = None
+
+
+class ProjectInsight(BaseModel):
+    """Human-readable deterministic insights for one project."""
+
+    project_name: str
+
+    activities: list[ActivityInsight] = Field(
+        default_factory=list
+    )
