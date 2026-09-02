@@ -6,6 +6,7 @@ from app.schemas.project_data import (
     ActivityScheduleImpact,
     ActivityScheduleImpactHistory,
     ProjectScheduleImpact,
+    ProjectScheduleImpactHistory,
     ProjectInsight,
     RiskResult,
     TrendResult,
@@ -191,6 +192,26 @@ def get_project_schedule_impact(
 ) -> ProjectScheduleImpact:
     _require_project(service, project_name)
     result = service.analyze_project_schedule_impact(project_name)
+
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Unknown project: {project_name}",
+        )
+
+    return result
+
+
+@router.get(
+    "/projects/{project_name}/schedule-impact/history",
+    response_model=ProjectScheduleImpactHistory,
+)
+def get_project_schedule_impact_history(
+    project_name: str,
+    service: AnalysisService = Depends(get_analysis_service),
+) -> ProjectScheduleImpactHistory:
+    _require_project(service, project_name)
+    result = service.analyze_project_schedule_impact_history(project_name)
 
     if result is None:
         raise HTTPException(
