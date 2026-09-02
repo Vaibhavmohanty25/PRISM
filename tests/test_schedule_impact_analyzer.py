@@ -262,3 +262,253 @@ def test_schedule_impact_response_models_are_exposed_in_openapi():
     assert schema["paths"][
         "/api/v1/projects/{project_name}/activities/{activity_name}/schedule-impact"
     ]["get"]["responses"]["200"]["content"]
+
+
+def test_schedule_impact_history_projects_one_valid_duration_observation():
+    tracker = ProgressTracker()
+    tracker.record(_report(delay_hours=8))
+
+    result = AnalysisService(tracker).analyze_activity_schedule_impact_history(
+        "Metro Project",
+        "Foundation RCC work",
+    )
+
+    assert result is not None
+    assert result.observations[0].report_date == "1 June 2025"
+    assert result.observations[0].delay_hours == 8
+    assert result.observations[0].delay_reason is None
+    assert result.observations[0].submission_order == 1
+
+
+def test_schedule_impact_history_includes_multiple_observations():
+    tracker = ProgressTracker()
+    tracker.record(_report(report_date="1 June 2025", delay_hours=8))
+    tracker.record(_report(report_date="8 June 2025", delay_reason="Rain"))
+
+    result = AnalysisService(tracker).analyze_activity_schedule_impact_history(
+        "Metro Project",
+        "Foundation RCC work",
+    )
+
+    assert result is not None
+    assert [(item.delay_hours, item.delay_reason) for item in result.observations] == [
+        (8, None),
+        (None, "Rain"),
+    ]
+
+
+def test_schedule_impact_history_applies_exact_delay_qualification_rules():
+    tracker = ProgressTracker()
+    tracker.record(_report(delay_hours=0))
+    tracker.record(_report(report_date="8 June 2025", delay_hours=-2))
+    tracker.record(_report(report_date="15 June 2025", delay_reason=" Rain "))
+    tracker.record(_report(report_date="22 June 2025", delay_hours=4))
+    tracker.record(_report(report_date="29 June 2025"))
+
+    result = AnalysisService(tracker).analyze_activity_schedule_impact_history(
+        "Metro Project",
+        "Foundation RCC work",
+    )
+
+    assert result is not None
+    assert [(item.delay_hours, item.delay_reason) for item in result.observations] == [
+        (0, None),
+        (None, "Rain"),
+        (4, None),
+    ]
+
+
+def test_boolean_delay_duration_is_not_valid_evidence():
+    tracker = ProgressTracker()
+    tracker.record(_report(delay_hours=True))
+    tracker.record(_report(report_date="8 June 2025", delay_hours=False))
+
+    result = AnalysisService(tracker).analyze_activity_schedule_impact_history(
+        "Metro Project",
+        "Foundation RCC work",
+    )
+
+    assert result is not None
+    assert result.observations == []
+
+
+def test_invalid_duration_with_valid_reason_is_reason_only_evidence():
+    tracker = ProgressTracker()
+    tracker.record(
+        _report(delay_hours=-2, delay_reason="Material shortage")
+    )
+
+    result = AnalysisService(tracker).analyze_activity_schedule_impact_history(
+        "Metro Project",
+        "Foundation RCC work",
+    )
+
+    assert result is not None
+    assert len(result.observations) == 1
+    assert result.observations[0].delay_hours is None
+    assert result.observations[0].delay_reason == "Material shortage"
+
+
+def test_whitespace_only_reason_does_not_qualify_by_itself():
+    tracker = ProgressTracker()
+    tracker.record(_report(delay_reason="   \t  "))
+
+    result = AnalysisService(tracker).analyze_activity_schedule_impact_history(
+        "Metro Project",
+        "Foundation RCC work",
+    )
+
+    assert result is not None
+    assert result.observations == []
+
+
+def test_schedule_impact_history_orders_by_date_then_submission_order():
+    tracker = ProgressTracker()
+    tracker.record(_report(report_date="15 June 2025", delay_hours=12))
+    tracker.record(_report(report_date="1 June 2025", delay_hours=4))
+    tracker.record(_report(report_date="1 June 2025", delay_reason="Rain"))
+
+    result = AnalysisService(tracker).analyze_activity_schedule_impact_history(
+        "Metro Project",
+        "Foundation RCC work",
+    )
+
+    assert result is not None
+    assert [item.submission_order for item in result.observations] == [2, 3, 1]
+    assert [item.report_date for item in result.observations] == [
+        "1 June 2025",
+        "1 June 2025",
+        "15 June 2025",
+    ]
+
+
+def test_schedule_impact_history_falls_back_to_submission_order_for_partial_dates():
+    tracker = ProgressTracker()
+    tracker.record(_report(report_date="15 June 2025", delay_hours=12))
+    tracker.record(_report(report_date=None, delay_reason="Rain"))
+    tracker.record(_report(report_date="1 June 2025", delay_hours=4))
+
+    result = AnalysisService(tracker).analyze_activity_schedule_impact_history(
+        "Metro Project",
+        "Foundation RCC work",
+    )
+
+    assert result is not None
+    assert [item.submission_order for item in result.observations] == [1, 2, 3]
+
+
+def test_excluded_undated_snapshot_still_triggers_submission_order_fallback():
+    tracker = ProgressTracker()
+    tracker.record(_report(report_date=None))
+    tracker.record(_report(report_date="15 June 2025", delay_hours=12))
+    tracker.record(_report(report_date="1 June 2025", delay_hours=4))
+
+    result = AnalysisService(tracker).analyze_activity_schedule_impact_history(
+        "Metro Project",
+        "Foundation RCC work",
+    )
+
+    assert result is not None
+    assert [item.submission_order for item in result.observations] == [2, 3]
+
+
+def test_schedule_impact_history_isolated_by_activity_and_project():
+    tracker = ProgressTracker()
+    tracker.record(_report(project_name="Project A", delay_reason="Rain"))
+    tracker.record(
+        _report(
+            project_name="Project B",
+            activity_name="Brick masonry work",
+            delay_hours=6,
+        )
+    )
+    service = AnalysisService(tracker)
+
+    result = service.analyze_activity_schedule_impact_history(
+        "Project A",
+        "Foundation RCC work",
+    )
+
+    assert result is not None
+    assert len(result.observations) == 1
+    assert service.analyze_activity_schedule_impact_history(
+        "Project A",
+        "Brick masonry work",
+    ) is None
+    assert service.analyze_activity_schedule_impact_history(
+        "Project B",
+        "Foundation RCC work",
+    ) is None
+
+
+def test_schedule_impact_history_returns_empty_observations_for_existing_activity():
+    tracker = ProgressTracker()
+    tracker.record(_report())
+
+    result = AnalysisService(tracker).analyze_activity_schedule_impact_history(
+        "Metro Project",
+        "Foundation RCC work",
+    )
+
+    assert result is not None
+    assert result.observations == []
+
+
+def test_schedule_impact_history_service_returns_none_for_unknown_project():
+    result = AnalysisService().analyze_activity_schedule_impact_history(
+        "Unknown Project",
+        "Foundation RCC work",
+    )
+
+    assert result is None
+
+
+def test_schedule_impact_history_endpoint_returns_typed_result_and_404s():
+    app.state.analysis_service = AnalysisService()
+    app.state.analysis_service.record_report(_report(delay_reason="Rain"))
+
+    with TestClient(app) as client:
+        response = client.get(
+            "/api/v1/projects/Metro%20Project/activities/"
+            "Foundation%20RCC%20work/schedule-impact/history"
+        )
+        unknown_project = client.get(
+            "/api/v1/projects/Unknown%20Project/activities/"
+            "Foundation%20RCC%20work/schedule-impact/history"
+        )
+        unknown_activity = client.get(
+            "/api/v1/projects/Metro%20Project/activities/"
+            "Unknown%20work/schedule-impact/history"
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "project_name": "Metro Project",
+        "activity_name": "Foundation RCC work",
+        "observations": [
+            {
+                "report_date": "1 June 2025",
+                "delay_hours": None,
+                "delay_reason": "Rain",
+                "submission_order": 1,
+            }
+        ],
+    }
+    assert unknown_project.status_code == 404
+    assert unknown_project.json()["error"]["code"] == "project_not_found"
+    assert unknown_activity.status_code == 404
+    assert unknown_activity.json()["error"]["code"] == "activity_not_found"
+
+
+def test_schedule_impact_history_response_model_is_exposed_in_openapi():
+    app.state.analysis_service = AnalysisService()
+
+    with TestClient(app) as client:
+        schema = client.get("/openapi.json").json()
+
+    components = schema["components"]["schemas"]
+    assert "ScheduleImpactObservation" in components
+    assert "ActivityScheduleImpactHistory" in components
+    assert schema["paths"][
+        "/api/v1/projects/{project_name}/activities/{activity_name}/schedule-impact/history"
+    ]["get"]["responses"]["200"]["content"]

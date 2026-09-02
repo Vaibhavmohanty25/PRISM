@@ -4,6 +4,7 @@ from app.schemas.project_data import (
     ActivityInsight,
     ActivityHistory,
     ActivityScheduleImpact,
+    ActivityScheduleImpactHistory,
     ProjectInsight,
     ProjectScheduleImpact,
     ProgressReport,
@@ -103,6 +104,16 @@ class AnalysisService:
         activity_name: str,
     ) -> ActivityScheduleImpact | None:
         return self.schedule_impact_analyzer.analyze_activity(
+            project_name,
+            activity_name,
+        )
+
+    def analyze_activity_schedule_impact_history(
+        self,
+        project_name: str | None,
+        activity_name: str,
+    ) -> ActivityScheduleImpactHistory | None:
+        return self.schedule_impact_analyzer.history_for_activity(
             project_name,
             activity_name,
         )
