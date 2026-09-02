@@ -4,6 +4,7 @@ from app.schemas.project_data import (
     ActivityInsight,
     ActivityHistory,
     ActivityScheduleImpact,
+    ActivityScheduleImpactHistory,
     ProjectScheduleImpact,
     ProjectInsight,
     RiskResult,
@@ -211,6 +212,30 @@ def get_activity_schedule_impact(
 ) -> ActivityScheduleImpact:
     _require_project(service, project_name)
     result = service.analyze_activity_schedule_impact(
+        project_name,
+        activity_name,
+    )
+
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Unknown activity: {activity_name}",
+        )
+
+    return result
+
+
+@router.get(
+    "/projects/{project_name}/activities/{activity_name}/schedule-impact/history",
+    response_model=ActivityScheduleImpactHistory,
+)
+def get_activity_schedule_impact_history(
+    project_name: str,
+    activity_name: str,
+    service: AnalysisService = Depends(get_analysis_service),
+) -> ActivityScheduleImpactHistory:
+    _require_project(service, project_name)
+    result = service.analyze_activity_schedule_impact_history(
         project_name,
         activity_name,
     )

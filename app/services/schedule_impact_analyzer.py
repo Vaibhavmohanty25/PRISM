@@ -4,7 +4,9 @@ from collections import defaultdict
 from app.schemas.project_data import (
     ActivityHistory,
     ActivityScheduleImpact,
+    ActivityScheduleImpactHistory,
     ProjectScheduleImpact,
+    ScheduleImpactObservation,
 )
 from app.services.progress_tracker import ProgressTracker
 from app.services.trend_analyzer import TrendAnalyzer, _ordered_snapshots
@@ -117,6 +119,49 @@ class ScheduleImpactAnalyzer:
             return None
 
         return self.analyze_history(history)
+
+    def history_for_activity(
+        self,
+        project_name: str | None,
+        activity_name: str,
+    ) -> ActivityScheduleImpactHistory | None:
+        history = self.tracker.get_activity_history(
+            project_name,
+            activity_name,
+        )
+
+        if history is None:
+            return None
+
+        observations = []
+
+        for snapshot in _ordered_snapshots(history.snapshots):
+            reason = _normalized_reason(snapshot.delay_reason)
+            has_duration = _valid_delay_hours(
+                snapshot.delay_duration_hours
+            )
+
+            if not has_duration and reason is None:
+                continue
+
+            observations.append(
+                ScheduleImpactObservation(
+                    report_date=snapshot.report_date,
+                    delay_hours=(
+                        snapshot.delay_duration_hours
+                        if has_duration
+                        else None
+                    ),
+                    delay_reason=reason,
+                    submission_order=snapshot.submission_order,
+                )
+            )
+
+        return ActivityScheduleImpactHistory(
+            project_name=history.project_name,
+            activity_name=history.activity_name,
+            observations=observations,
+        )
 
     def analyze_project(
         self,

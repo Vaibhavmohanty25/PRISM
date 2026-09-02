@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 # ============================================================
@@ -98,6 +98,14 @@ class ActivityProgress(BaseModel):
 
     delay_duration_hours: float | None = None
 
+    @field_validator("delay_duration_hours", mode="before")
+    @classmethod
+    def reject_boolean_delay_duration(cls, value):
+        if isinstance(value, bool):
+            return None
+
+        return value
+
     # Evidence from original document
     evidence: ExtractionEvidence | None = None
 
@@ -191,6 +199,14 @@ class ActivitySnapshot(BaseModel):
     delay_reason: str | None = None
 
     delay_duration_hours: float | None = None
+
+    @field_validator("delay_duration_hours", mode="before")
+    @classmethod
+    def reject_boolean_delay_duration(cls, value):
+        if isinstance(value, bool):
+            return None
+
+        return value
 
 
 class ActivityHistory(BaseModel):
@@ -398,5 +414,29 @@ class ProjectScheduleImpact(BaseModel):
     project_name: str
 
     activities: list[ActivityScheduleImpact] = Field(
+        default_factory=list
+    )
+
+
+class ScheduleImpactObservation(BaseModel):
+    """One accepted observed delay record."""
+
+    report_date: str | None = None
+
+    delay_hours: float | None = None
+
+    delay_reason: str | None = None
+
+    submission_order: int = Field(ge=1)
+
+
+class ActivityScheduleImpactHistory(BaseModel):
+    """Accepted delay observations for one activity."""
+
+    project_name: str
+
+    activity_name: str
+
+    observations: list[ScheduleImpactObservation] = Field(
         default_factory=list
     )
