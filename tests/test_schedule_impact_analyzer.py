@@ -512,3 +512,159 @@ def test_schedule_impact_history_response_model_is_exposed_in_openapi():
     assert schema["paths"][
         "/api/v1/projects/{project_name}/activities/{activity_name}/schedule-impact/history"
     ]["get"]["responses"]["200"]["content"]
+
+
+def test_project_schedule_impact_history_composes_all_activity_evidence():
+    tracker = ProgressTracker()
+    tracker.record(
+        _report(
+            activity_name="Zinc work",
+            delay_hours=2,
+        )
+    )
+    tracker.record(
+        _report(
+            activity_name="Brick masonry work",
+            delay_reason="Rain",
+        )
+    )
+
+    result = AnalysisService(tracker).analyze_project_schedule_impact_history(
+        "Metro Project",
+    )
+
+    assert result is not None
+    assert result.project_name == "Metro Project"
+    assert [activity.activity_name for activity in result.activities] == [
+        "Brick masonry work",
+        "Zinc work",
+    ]
+    assert result.activities[0].observations[0].delay_reason == "Rain"
+    assert result.activities[1].observations[0].delay_hours == 2
+
+
+def test_project_schedule_impact_history_includes_activities_with_empty_evidence():
+    tracker = ProgressTracker()
+    tracker.record(
+        _report(
+            activity_name="Foundation RCC work",
+            delay_hours=4,
+        )
+    )
+    tracker.record(
+        _report(
+            activity_name="Site cleanup",
+        )
+    )
+
+    result = AnalysisService(tracker).analyze_project_schedule_impact_history(
+        "Metro Project",
+    )
+
+    assert result is not None
+    cleanup = next(
+        activity
+        for activity in result.activities
+        if activity.activity_name == "Site cleanup"
+    )
+    assert cleanup.observations == []
+
+
+def test_project_schedule_impact_history_preserves_each_activity_ordering():
+    tracker = ProgressTracker()
+    tracker.record(
+        _report(
+            activity_name="Foundation RCC work",
+            report_date="15 June 2025",
+            delay_hours=12,
+        )
+    )
+    tracker.record(
+        _report(
+            activity_name="Foundation RCC work",
+            report_date="1 June 2025",
+            delay_hours=4,
+        )
+    )
+    tracker.record(
+        _report(
+            activity_name="Brick masonry work",
+            report_date=None,
+            delay_reason="Rain",
+        )
+    )
+    tracker.record(
+        _report(
+            activity_name="Brick masonry work",
+            report_date="1 June 2025",
+            delay_hours=2,
+        )
+    )
+
+    result = AnalysisService(tracker).analyze_project_schedule_impact_history(
+        "Metro Project",
+    )
+
+    assert result is not None
+    foundation = next(
+        activity
+        for activity in result.activities
+        if activity.activity_name == "Foundation RCC work"
+    )
+    masonry = next(
+        activity
+        for activity in result.activities
+        if activity.activity_name == "Brick masonry work"
+    )
+    assert [item.submission_order for item in foundation.observations] == [2, 1]
+    assert [item.submission_order for item in masonry.observations] == [3, 4]
+
+
+def test_project_schedule_impact_history_service_returns_none_for_unknown_project():
+    result = AnalysisService().analyze_project_schedule_impact_history(
+        "Unknown Project",
+    )
+
+    assert result is None
+
+
+def test_project_schedule_impact_history_endpoint_returns_typed_result_and_404():
+    app.state.analysis_service = AnalysisService()
+    app.state.analysis_service.record_report(
+        _report(activity_name="Foundation RCC work", delay_hours=4)
+    )
+    app.state.analysis_service.record_report(
+        _report(activity_name="Site cleanup")
+    )
+
+    with TestClient(app) as client:
+        response = client.get(
+            "/api/v1/projects/Metro%20Project/schedule-impact/history"
+        )
+        unknown_project = client.get(
+            "/api/v1/projects/Unknown%20Project/schedule-impact/history"
+        )
+
+    assert response.status_code == 200
+    assert response.json()["project_name"] == "Metro Project"
+    site_cleanup = next(
+        activity
+        for activity in response.json()["activities"]
+        if activity["activity_name"] == "Site cleanup"
+    )
+    assert site_cleanup["observations"] == []
+    assert unknown_project.status_code == 404
+    assert unknown_project.json()["error"]["code"] == "project_not_found"
+
+
+def test_project_schedule_impact_history_response_model_is_exposed_in_openapi():
+    app.state.analysis_service = AnalysisService()
+
+    with TestClient(app) as client:
+        schema = client.get("/openapi.json").json()
+
+    components = schema["components"]["schemas"]
+    assert "ProjectScheduleImpactHistory" in components
+    assert schema["paths"][
+        "/api/v1/projects/{project_name}/schedule-impact/history"
+    ]["get"]["responses"]["200"]["content"]

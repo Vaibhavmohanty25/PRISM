@@ -440,3 +440,13 @@ class ActivityScheduleImpactHistory(BaseModel):
     observations: list[ScheduleImpactObservation] = Field(
         default_factory=list
     )
+
+
+class ProjectScheduleImpactHistory(BaseModel):
+    """Accepted schedule-impact observations for one project."""
+
+    project_name: str
+
+    activities: list[ActivityScheduleImpactHistory] = Field(
+        default_factory=list
+    )

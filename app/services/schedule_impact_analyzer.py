@@ -6,6 +6,7 @@ from app.schemas.project_data import (
     ActivityScheduleImpact,
     ActivityScheduleImpactHistory,
     ProjectScheduleImpact,
+    ProjectScheduleImpactHistory,
     ScheduleImpactObservation,
 )
 from app.services.progress_tracker import ProgressTracker
@@ -161,6 +162,29 @@ class ScheduleImpactAnalyzer:
             project_name=history.project_name,
             activity_name=history.activity_name,
             observations=observations,
+        )
+
+    def history_for_project(
+        self,
+        project_name: str | None,
+    ) -> ProjectScheduleImpactHistory | None:
+        if project_name not in self.tracker.get_projects():
+            return None
+
+        histories = self.tracker.get_all_histories(project_name)
+        activities = []
+
+        for history in histories:
+            activity_history = self.history_for_activity(
+                project_name,
+                history.activity_name,
+            )
+            if activity_history is not None:
+                activities.append(activity_history)
+
+        return ProjectScheduleImpactHistory(
+            project_name=project_name or "",
+            activities=activities,
         )
 
     def analyze_project(
