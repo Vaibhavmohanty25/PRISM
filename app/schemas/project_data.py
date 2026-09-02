@@ -450,3 +450,35 @@ class ProjectScheduleImpactHistory(BaseModel):
     activities: list[ActivityScheduleImpactHistory] = Field(
         default_factory=list
     )
+
+
+class IssueObservation(BaseModel):
+    """One accepted observed issue record."""
+
+    report_date: str | None = None
+
+    issue: str
+
+    submission_order: int = Field(ge=1)
+
+
+class ActivityIssueHistory(BaseModel):
+    """Accepted issue observations for one activity."""
+
+    project_name: str
+
+    activity_name: str
+
+    observations: list[IssueObservation] = Field(
+        default_factory=list
+    )
+
+
+class ProjectIssueHistory(BaseModel):
+    """Accepted issue observations for one project."""
+
+    project_name: str
+
+    activities: list[ActivityIssueHistory] = Field(
+        default_factory=list
+    )

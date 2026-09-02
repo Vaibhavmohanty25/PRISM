@@ -5,7 +5,9 @@ from app.schemas.project_data import (
     ActivityHistory,
     ActivityScheduleImpact,
     ActivityScheduleImpactHistory,
+    ActivityIssueHistory,
     ProjectInsight,
+    ProjectIssueHistory,
     ProjectScheduleImpact,
     ProjectScheduleImpactHistory,
     ProgressReport,
@@ -15,6 +17,7 @@ from app.schemas.project_data import (
 from app.services.progress_tracker import ProgressTracker
 from app.services.risk_analyzer import RiskAnalyzer
 from app.services.insight_analyzer import InsightAnalyzer
+from app.services.issue_evidence_analyzer import IssueEvidenceAnalyzer
 from app.services.schedule_impact_analyzer import ScheduleImpactAnalyzer
 from app.services.trend_analyzer import TrendAnalyzer
 
@@ -32,6 +35,9 @@ class AnalysisService:
             self.risk_analyzer,
         )
         self.schedule_impact_analyzer = ScheduleImpactAnalyzer(
+            self.tracker,
+        )
+        self.issue_evidence_analyzer = IssueEvidenceAnalyzer(
             self.tracker,
         )
 
@@ -132,6 +138,24 @@ class AnalysisService:
         project_name: str | None,
     ) -> ProjectScheduleImpact | None:
         return self.schedule_impact_analyzer.analyze_project(
+            project_name,
+        )
+
+    def analyze_activity_issue_history(
+        self,
+        project_name: str | None,
+        activity_name: str,
+    ) -> ActivityIssueHistory | None:
+        return self.issue_evidence_analyzer.history_for_activity(
+            project_name,
+            activity_name,
+        )
+
+    def analyze_project_issue_history(
+        self,
+        project_name: str | None,
+    ) -> ProjectIssueHistory | None:
+        return self.issue_evidence_analyzer.history_for_project(
             project_name,
         )
 

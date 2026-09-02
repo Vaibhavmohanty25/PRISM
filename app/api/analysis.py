@@ -2,12 +2,14 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from app.schemas.project_data import (
     ActivityInsight,
+    ActivityIssueHistory,
     ActivityHistory,
     ActivityScheduleImpact,
     ActivityScheduleImpactHistory,
     ProjectScheduleImpact,
     ProjectScheduleImpactHistory,
     ProjectInsight,
+    ProjectIssueHistory,
     RiskResult,
     TrendResult,
 )
@@ -257,6 +259,50 @@ def get_activity_schedule_impact_history(
 ) -> ActivityScheduleImpactHistory:
     _require_project(service, project_name)
     result = service.analyze_activity_schedule_impact_history(
+        project_name,
+        activity_name,
+    )
+
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Unknown activity: {activity_name}",
+        )
+
+    return result
+
+
+@router.get(
+    "/projects/{project_name}/issues/history",
+    response_model=ProjectIssueHistory,
+)
+def get_project_issue_history(
+    project_name: str,
+    service: AnalysisService = Depends(get_analysis_service),
+) -> ProjectIssueHistory:
+    _require_project(service, project_name)
+    result = service.analyze_project_issue_history(project_name)
+
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Unknown project: {project_name}",
+        )
+
+    return result
+
+
+@router.get(
+    "/projects/{project_name}/activities/{activity_name}/issues/history",
+    response_model=ActivityIssueHistory,
+)
+def get_activity_issue_history(
+    project_name: str,
+    activity_name: str,
+    service: AnalysisService = Depends(get_analysis_service),
+) -> ActivityIssueHistory:
+    _require_project(service, project_name)
+    result = service.analyze_activity_issue_history(
         project_name,
         activity_name,
     )
