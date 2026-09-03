@@ -135,6 +135,13 @@ def test_malformed_file_has_safe_client_error(client, monkeypatch):
 def test_extraction_failure_has_safe_server_error(client, monkeypatch):
     import app.api.upload as upload_module
 
+    exception_messages = []
+    monkeypatch.setattr(
+        upload_module.logger,
+        "exception",
+        lambda message: exception_messages.append(message),
+    )
+
     monkeypatch.setattr(
         upload_module,
         "process_file",
@@ -149,6 +156,7 @@ def test_extraction_failure_has_safe_server_error(client, monkeypatch):
     error = _error_body(response)
     assert error["code"] == "processing_failed"
     assert "provider secret" not in json.dumps(response.json())
+    assert exception_messages == ["Upload processing failed"]
 
 
 def test_failed_upload_file_is_cleaned_up(client, tmp_path, monkeypatch):

@@ -1,6 +1,9 @@
+from pathlib import Path
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.analysis import router as analysis_router
@@ -19,6 +22,20 @@ app = FastAPI(
 app.include_router(upload_router)
 app.include_router(analysis_router)
 app.state.analysis_service = AnalysisService()
+
+STATIC_DIR = Path(__file__).parent / "static"
+
+
+@app.get("/ui", include_in_schema=False)
+def interview_ui() -> FileResponse:
+    return FileResponse(STATIC_DIR / "index.html")
+
+
+app.mount(
+    "/ui",
+    StaticFiles(directory=STATIC_DIR),
+    name="interview-ui-assets",
+)
 
 
 @app.get("/", response_model=RootResponse)

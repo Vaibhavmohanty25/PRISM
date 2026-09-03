@@ -1,4 +1,5 @@
 import os
+import logging
 import uuid
 
 from fastapi import (
@@ -18,6 +19,9 @@ from app.services.analysis_service import (
 from app.services.file_router import process_file
 from app.core.config import settings
 from app.schemas.api import UploadResponse
+
+
+logger = logging.getLogger(__name__)
 
 
 router = APIRouter(
@@ -142,6 +146,7 @@ async def upload_file(
             },
         )
     except Exception:
+        logger.exception("Upload processing failed")
         raise HTTPException(
             status_code=500,
             detail={

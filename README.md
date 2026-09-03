@@ -62,6 +62,15 @@ uvicorn app.main:app --reload
 Interactive API documentation is available at `/docs`; the OpenAPI document
 is available at `/openapi.json`.
 
+## Run the interview UI
+
+Start the same FastAPI application as above, then open
+`http://127.0.0.1:8000/ui`. The dashboard uses the existing in-memory API
+contracts to show project progress, trends, observed risks, explainable
+insights, schedule impact, and project/activity evidence histories. Use
+**Upload report** to submit a PDF, image, or spreadsheet through the existing
+`POST /api/v1/upload` endpoint; the project list refreshes after processing.
+
 ## Configuration
 
 The following settings can be provided through environment variables or `.env`:
@@ -147,6 +156,12 @@ python -m pytest -v
 
 The suite includes extraction, schema, recording, trend, risk, insight, API
 contract, upload validation, error handling, cleanup, and OpenAPI coverage.
+
+The interview UI is intentionally a vanilla HTML/CSS/JavaScript surface served
+at `/ui`; it adds no persistence, authentication, forecasting, or frontend
+framework. Data remains in memory and is lost when the process restarts. Upload
+processing still requires the configured extraction environment and can take
+time for OCR or AI-assisted extraction.
 
 ## Project status
 
