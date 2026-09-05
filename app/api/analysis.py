@@ -4,6 +4,7 @@ from app.schemas.project_data import (
     ActivityInsight,
     ActivityIssueHistory,
     ActivityHistory,
+    ForecastResult,
     ActivityScheduleImpact,
     ActivityScheduleImpactHistory,
     ProjectScheduleImpact,
@@ -91,6 +92,30 @@ def get_activity_trend(
 ) -> TrendResult:
     _require_project(service, project_name)
     result = service.analyze_activity_trend(
+        project_name,
+        activity_name,
+    )
+
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Unknown activity: {activity_name}",
+        )
+
+    return result
+
+
+@router.get(
+    "/projects/{project_name}/activities/{activity_name}/forecast",
+    response_model=ForecastResult,
+)
+def get_activity_forecast(
+    project_name: str,
+    activity_name: str,
+    service: AnalysisService = Depends(get_analysis_service),
+) -> ForecastResult:
+    _require_project(service, project_name)
+    result = service.analyze_activity_forecast(
         project_name,
         activity_name,
     )

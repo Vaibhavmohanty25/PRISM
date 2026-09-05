@@ -3,6 +3,7 @@ from fastapi import Request
 from app.schemas.project_data import (
     ActivityInsight,
     ActivityHistory,
+    ForecastResult,
     ActivityScheduleImpact,
     ActivityScheduleImpactHistory,
     ActivityIssueHistory,
@@ -20,6 +21,7 @@ from app.services.insight_analyzer import InsightAnalyzer
 from app.services.issue_evidence_analyzer import IssueEvidenceAnalyzer
 from app.services.schedule_impact_analyzer import ScheduleImpactAnalyzer
 from app.services.trend_analyzer import TrendAnalyzer
+from app.services.forecast_analyzer import ForecastAnalyzer
 
 
 class AnalysisService:
@@ -28,6 +30,7 @@ class AnalysisService:
     def __init__(self, tracker: ProgressTracker | None = None) -> None:
         self.tracker = tracker or ProgressTracker()
         self.trend_analyzer = TrendAnalyzer(self.tracker)
+        self.forecast_analyzer = ForecastAnalyzer(self.tracker)
         self.risk_analyzer = RiskAnalyzer(self.tracker)
         self.insight_analyzer = InsightAnalyzer(
             self.tracker,
@@ -75,6 +78,16 @@ class AnalysisService:
         project_name: str | None,
     ) -> list[TrendResult]:
         return self.trend_analyzer.analyze_project(project_name)
+
+    def analyze_activity_forecast(
+        self,
+        project_name: str | None,
+        activity_name: str,
+    ) -> ForecastResult | None:
+        return self.forecast_analyzer.analyze_activity(
+            project_name,
+            activity_name,
+        )
 
     def analyze_activity_risk(
         self,

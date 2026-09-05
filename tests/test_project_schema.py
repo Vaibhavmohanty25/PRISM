@@ -1,8 +1,29 @@
+import pytest
+
 from app.schemas.project_data import (
     ProgressReport,
     ActivityProgress,
     ExtractionMetadata
 )
+
+
+@pytest.mark.parametrize("value", [True, False])
+def test_boolean_progress_percentage_is_invalid(value):
+    with pytest.raises(ValueError):
+        ActivityProgress(
+            activity_name="Foundation Work",
+            progress_percentage=value,
+        )
+
+
+@pytest.mark.parametrize("value", [0, 1, 50, 100])
+def test_numeric_progress_percentage_values_remain_valid(value):
+    activity = ActivityProgress(
+        activity_name="Foundation Work",
+        progress_percentage=value,
+    )
+
+    assert activity.progress_percentage == value
 
 
 def test_progress_report():

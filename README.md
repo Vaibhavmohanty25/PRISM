@@ -13,11 +13,11 @@ The current backend supports:
 - Structured Gemini extraction for document text
 - Pydantic validation and normalization
 - In-memory report recording
-- Activity history, trend analysis, observed-risk scoring, and explainable insights
+- Activity history, deterministic forecasting, trend analysis, observed-risk scoring, and explainable insights
 - A versioned HTTP API under `/api/v1`
 
 Data is currently held in memory for the running process. Persistence,
-authentication, forecasting, and notifications are outside the current scope.
+authentication, project-level forecasting, and notifications are outside the current scope.
 
 ## Architecture
 
@@ -93,6 +93,7 @@ The following settings can be provided through environment variables or `.env`:
 | GET | `/api/v1/projects/{project_name}/activities/{activity_name}/history` | Activity history |
 | GET | `/api/v1/projects/{project_name}/trends` | Project activity trends |
 | GET | `/api/v1/projects/{project_name}/activities/{activity_name}/trend` | Activity trend |
+| GET | `/api/v1/projects/{project_name}/activities/{activity_name}/forecast` | Activity forecast |
 | GET | `/api/v1/projects/{project_name}/risks` | Project activity risks |
 | GET | `/api/v1/projects/{project_name}/activities/{activity_name}/risk` | Activity risk |
 | GET | `/api/v1/projects/{project_name}/insights` | Project explainable insights |

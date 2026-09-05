@@ -88,6 +88,16 @@ class ActivityProgress(BaseModel):
         le=100.0
     )
 
+    @field_validator("progress_percentage", mode="before")
+    @classmethod
+    def reject_boolean_progress_percentage(cls, value):
+        if isinstance(value, bool):
+            raise ValueError(
+                "progress_percentage must be numeric, not boolean"
+            )
+
+        return value
+
     status: str | None = None
 
     issues: list[str] = Field(
@@ -255,6 +265,45 @@ class TrendResult(BaseModel):
         ge=0.0,
         le=100.0,
     )
+
+
+ForecastStatus = Literal[
+    "available",
+    "insufficient_data",
+    "unavailable",
+]
+
+
+class ForecastResult(BaseModel):
+    """Deterministic activity completion estimate from observed history."""
+
+    project_name: str
+
+    activity_name: str
+
+    status: ForecastStatus
+
+    current_progress: float | None = None
+
+    remaining_progress: float | None = None
+
+    historical_velocity_per_day: float | None = None
+
+    estimated_days_to_completion: float | None = None
+
+    estimated_completion_date: str | None = None
+
+    observation_count: int = Field(ge=0)
+
+    first_report_date: str | None = None
+
+    latest_report_date: str | None = None
+
+    forecast_method: str
+
+    evidence: list[str] = Field(default_factory=list)
+
+    data_note: str | None = None
 
 
 RiskLevel = Literal[

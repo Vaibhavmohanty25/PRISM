@@ -230,3 +230,68 @@ def test_public_endpoints_expose_response_models_in_openapi(client):
     assert schema["paths"]["/health"]["get"]["responses"]["200"]["content"]
     assert schema["paths"]["/api/v1/projects"]["get"]["responses"]["200"]["content"]
     assert schema["paths"]["/api/v1/upload"]["post"]["responses"]["201"]["content"]
+
+
+def test_activity_forecast_endpoint_returns_typed_result_and_404s(client):
+    app.state.analysis_service.record_report(
+        ProgressReport(
+            project_name="  Metro Project  ",
+            report_date="1 June 2025",
+            activities=[
+                ActivityProgress(
+                    activity_name=" Foundation RCC work ",
+                    progress_percentage=35,
+                )
+            ],
+        )
+    )
+    app.state.analysis_service.record_report(
+        ProgressReport(
+            project_name="metro project",
+            report_date="15 June 2025",
+            activities=[
+                ActivityProgress(
+                    activity_name="Foundation RCC work",
+                    progress_percentage=57,
+                )
+            ],
+        )
+    )
+
+    response = client.get(
+        "/api/v1/projects/%20METRO%20PROJECT%20/activities/"
+        "foundation%20rcc%20work/forecast"
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["project_name"] == "Metro Project"
+    assert body["activity_name"] == "Foundation RCC work"
+    assert body["status"] == "available"
+    assert body["forecast_method"] == "net_observed_progress_velocity"
+    assert body["estimated_completion_date"] == "2025-07-12"
+    assert body["evidence"]
+
+    unknown_project = client.get(
+        "/api/v1/projects/Unknown/activities/Task/forecast"
+    )
+    unknown_activity = client.get(
+        "/api/v1/projects/Metro%20Project/activities/Unknown/forecast"
+    )
+
+    assert unknown_project.status_code == 404
+    assert unknown_activity.status_code == 404
+    assert _error_body(unknown_project)["code"] == "project_not_found"
+    assert _error_body(unknown_activity)["code"] == "activity_not_found"
+
+
+def test_activity_forecast_response_model_is_exposed_in_openapi(client):
+    schema = client.get("/openapi.json").json()
+
+    response = schema["paths"][
+        "/api/v1/projects/{project_name}/activities/{activity_name}/forecast"
+    ]["get"]["responses"]["200"]
+
+    assert response["content"]["application/json"]["schema"]["$ref"].endswith(
+        "/ForecastResult"
+    )
