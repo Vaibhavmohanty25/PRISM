@@ -22,7 +22,7 @@ def project_key(
     if not project_name or not project_name.strip():
         return UNASSIGNED_PROJECT
 
-    return project_name.strip()
+    return project_name.strip().casefold()
 
 
 class ProgressTracker:
@@ -38,6 +38,7 @@ class ProgressTracker:
             str,
             dict[str, dict[str, object]],
         ] = {}
+        self._project_display_names: dict[str, str] = {}
         self._submission_counters: dict[str, int] = {}
         self._recorded_snapshot_keys: set[tuple[str, ...]] = set()
 
@@ -96,12 +97,15 @@ class ProgressTracker:
 
         if key not in self._activities:
             self._activities[key] = {}
+            self._project_display_names[key] = (
+                report.project_name.strip()
+                if report.project_name and report.project_name.strip()
+                else UNASSIGNED_PROJECT
+            )
             self._submission_counters[key] = 0
 
-        self._submission_counters[key] += 1
-        submission_order = self._submission_counters[key]
-
         report_identity = self._report_identity(report)
+        new_activities = []
 
         for activity in report.activities:
             if not activity.activity_name:
@@ -117,6 +121,15 @@ class ProgressTracker:
             if snapshot_key in self._recorded_snapshot_keys:
                 continue
 
+            new_activities.append((activity, display_name, activity_key, snapshot_key))
+
+        if not new_activities:
+            return
+
+        self._submission_counters[key] += 1
+        submission_order = self._submission_counters[key]
+
+        for activity, display_name, activity_key, snapshot_key in new_activities:
             self._recorded_snapshot_keys.add(snapshot_key)
 
             snapshot = ActivitySnapshot(
@@ -150,7 +163,20 @@ class ProgressTracker:
             ].append(snapshot)
 
     def get_projects(self) -> list[str]:
-        return sorted(self._activities.keys())
+        return sorted(
+            self._project_display_names.values(),
+            key=str.casefold,
+        )
+
+    def has_project(self, project_name: str | None) -> bool:
+        return project_key(project_name) in self._activities
+
+    def get_project_display_name(
+        self,
+        project_name: str | None,
+    ) -> str | None:
+        key = project_key(project_name)
+        return self._project_display_names.get(key)
 
     def get_activity_history(
         self,
@@ -171,7 +197,7 @@ class ProgressTracker:
             return None
 
         return ActivityHistory(
-            project_name=key,
+            project_name=self._project_display_names[key],
             activity_name=entry["display_name"],
             snapshots=list(entry["snapshots"]),
         )
@@ -191,7 +217,7 @@ class ProgressTracker:
         for entry in project_activities.values():
             histories.append(
                 ActivityHistory(
-                    project_name=key,
+                    project_name=self._project_display_names[key],
                     activity_name=entry["display_name"],
                     snapshots=list(entry["snapshots"]),
                 )

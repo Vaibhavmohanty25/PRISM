@@ -112,6 +112,55 @@ def test_exact_duplicate_report_is_still_deduplicated():
     assert len(history.snapshots) == 1
 
 
+def test_duplicate_report_does_not_consume_submission_order():
+    tracker = ProgressTracker()
+    first_report = _make_report(
+        project_name="Metro Project",
+        report_date="1 June 2025",
+        activities=[_activity("Foundation RCC work", 35)],
+    )
+    second_report = _make_report(
+        project_name="Metro Project",
+        report_date="8 June 2025",
+        activities=[_activity("Foundation RCC work", 48)],
+    )
+
+    tracker.record(first_report)
+    tracker.record(second_report)
+    tracker.record(first_report)
+
+    history = tracker.get_activity_history(
+        "Metro Project",
+        "Foundation RCC work",
+    )
+
+    assert history is not None
+    assert [snapshot.submission_order for snapshot in history.snapshots] == [
+        1,
+        2,
+    ]
+
+    third_report = _make_report(
+        project_name="Metro Project",
+        report_date="15 June 2025",
+        activities=[_activity("Foundation RCC work", 57)],
+    )
+    tracker.record(third_report)
+
+    assert [snapshot.submission_order for snapshot in history.snapshots] == [
+        1,
+        2,
+    ]
+    refreshed_history = tracker.get_activity_history(
+        "Metro Project",
+        "Foundation RCC work",
+    )
+    assert [
+        snapshot.submission_order
+        for snapshot in refreshed_history.snapshots
+    ] == [1, 2, 3]
+
+
 def test_duplicate_protection_is_deterministic():
     first_report = _make_report(
         project_name=" Metro Project ",
@@ -365,6 +414,88 @@ def test_project_isolation():
         "Project A",
         "Brick masonry work",
     ) is None
+
+
+def test_project_identity_is_case_insensitive_and_preserves_first_display_name():
+    tracker = ProgressTracker()
+
+    tracker.record(
+        _make_report(
+            project_name="  Metro Project  ",
+            report_date="1 June 2025",
+            activities=[_activity("Foundation RCC work", 30)],
+        )
+    )
+    tracker.record(
+        _make_report(
+            project_name="metro project",
+            report_date="8 June 2025",
+            activities=[_activity("Foundation RCC work", 45)],
+        )
+    )
+    tracker.record(
+        _make_report(
+            project_name="Metro Projects",
+            report_date="1 June 2025",
+            activities=[_activity("Foundation RCC work", 60)],
+        )
+    )
+
+    assert tracker.get_projects() == ["Metro Project", "Metro Projects"]
+    history = tracker.get_activity_history(
+        " METRO PROJECT ",
+        "Foundation RCC work",
+    )
+    other_history = tracker.get_activity_history(
+        "metro projects",
+        "Foundation RCC work",
+    )
+
+    assert history is not None
+    assert history.project_name == "Metro Project"
+    assert [snapshot.progress_percentage for snapshot in history.snapshots] == [
+        30,
+        45,
+    ]
+    assert other_history is not None
+    assert other_history.project_name == "Metro Projects"
+    assert [snapshot.progress_percentage for snapshot in other_history.snapshots] == [
+        60,
+    ]
+
+
+def test_duplicate_submission_order_is_isolated_by_project():
+    tracker = ProgressTracker()
+    report_a = _make_report(
+        project_name="Project A",
+        report_date="1 June 2025",
+        activities=[_activity("Foundation RCC work", 30)],
+    )
+    report_b = _make_report(
+        project_name="Project B",
+        report_date="1 June 2025",
+        activities=[_activity("Foundation RCC work", 50)],
+    )
+
+    tracker.record(report_a)
+    tracker.record(report_a)
+    tracker.record(report_b)
+    tracker.record(
+        _make_report(
+            project_name="Project A",
+            report_date="8 June 2025",
+            activities=[_activity("Foundation RCC work", 40)],
+        )
+    )
+
+    history_a = tracker.get_activity_history("project a", "Foundation RCC work")
+    history_b = tracker.get_activity_history("PROJECT B", "Foundation RCC work")
+
+    assert [snapshot.submission_order for snapshot in history_a.snapshots] == [
+        1,
+        2,
+    ]
+    assert [snapshot.submission_order for snapshot in history_b.snapshots] == [1]
 
 
 def test_unassigned_project_bucket():

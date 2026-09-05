@@ -7,6 +7,7 @@ from app.schemas.project_data import (
 from app.services.progress_tracker import ProgressTracker
 from app.services.trend_analyzer import (
     TrendAnalyzer,
+    _ordered_snapshots,
     parse_report_date,
 )
 
@@ -206,6 +207,39 @@ def test_known_date_gap_velocity_calculation():
     )
 
     assert result.average_velocity_per_day == 2.0
+
+
+def test_out_of_order_dated_ingestion_uses_one_chronological_sequence():
+    tracker = ProgressTracker()
+    analyzer = _record_reports(
+        tracker,
+        "Metro Project",
+        "Foundation RCC work",
+        [
+            ("15 June 2025", 20),
+            ("1 June 2025", 10),
+        ],
+    )
+
+    history = tracker.get_activity_history(
+        "Metro Project",
+        "Foundation RCC work",
+    )
+    result = analyzer.analyze_activity(
+        "Metro Project",
+        "Foundation RCC work",
+    )
+
+    assert history is not None
+    ordered = _ordered_snapshots(history.snapshots)
+    assert [snapshot.report_date for snapshot in ordered] == [
+        "1 June 2025",
+        "15 June 2025",
+    ]
+    assert result.progress_deltas == [10.0]
+    assert result.first_progress == 10
+    assert result.last_progress == 20
+    assert result.average_velocity_per_day == 10 / 14
 
 
 def test_unparseable_dates_use_submission_order_without_velocity():

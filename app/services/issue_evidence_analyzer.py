@@ -57,7 +57,7 @@ class IssueEvidenceAnalyzer:
         self,
         project_name: str | None,
     ) -> ProjectIssueHistory | None:
-        if project_name not in self.tracker.get_projects():
+        if not self.tracker.has_project(project_name):
             return None
 
         activities = []
@@ -72,6 +72,9 @@ class IssueEvidenceAnalyzer:
                 activities.append(activity_history)
 
         return ProjectIssueHistory(
-            project_name=project_name or "",
+            project_name=(
+                self.tracker.get_project_display_name(project_name)
+                or ""
+            ),
             activities=activities,
         )

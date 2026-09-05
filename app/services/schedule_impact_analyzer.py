@@ -168,7 +168,7 @@ class ScheduleImpactAnalyzer:
         self,
         project_name: str | None,
     ) -> ProjectScheduleImpactHistory | None:
-        if project_name not in self.tracker.get_projects():
+        if not self.tracker.has_project(project_name):
             return None
 
         histories = self.tracker.get_all_histories(project_name)
@@ -183,7 +183,10 @@ class ScheduleImpactAnalyzer:
                 activities.append(activity_history)
 
         return ProjectScheduleImpactHistory(
-            project_name=project_name or "",
+            project_name=(
+                self.tracker.get_project_display_name(project_name)
+                or ""
+            ),
             activities=activities,
         )
 
@@ -191,12 +194,15 @@ class ScheduleImpactAnalyzer:
         self,
         project_name: str | None,
     ) -> ProjectScheduleImpact | None:
-        if project_name not in self.tracker.get_projects():
+        if not self.tracker.has_project(project_name):
             return None
 
         histories = self.tracker.get_all_histories(project_name)
         return ProjectScheduleImpact(
-            project_name=project_name or "",
+            project_name=(
+                self.tracker.get_project_display_name(project_name)
+                or ""
+            ),
             activities=[
                 self.analyze_history(history)
                 for history in histories

@@ -112,6 +112,51 @@ def test_analysis_endpoints_return_results_and_404_for_unknown_resources():
     assert unknown_activity.status_code == 404
 
 
+def test_project_api_lookup_accepts_canonical_identity_aliases():
+    app.state.analysis_service = AnalysisService()
+    app.state.analysis_service.record_report(
+        ProgressReport(
+            project_name="  Metro Project  ",
+            report_date="1 June 2025",
+            activities=[
+                ActivityProgress(
+                    activity_name="Foundation RCC work",
+                    progress_percentage=35,
+                    issues=["Rain"],
+                    delay_reason="Rain",
+                )
+            ],
+        )
+    )
+
+    with TestClient(app) as client:
+        projects = client.get("/api/v1/projects")
+        trends = client.get("/api/v1/projects/%20metro%20project%20/trends")
+        insights = client.get(
+            "/api/v1/projects/%20METRO%20PROJECT%20/insights"
+        )
+        schedule = client.get(
+            "/api/v1/projects/%20METRO%20PROJECT%20/schedule-impact"
+        )
+        schedule_history = client.get(
+            "/api/v1/projects/%20metro%20project%20/schedule-impact/history"
+        )
+        issue_history = client.get(
+            "/api/v1/projects/%20METRO%20PROJECT%20/issues/history"
+        )
+
+    assert projects.json() == {"projects": ["Metro Project"]}
+    assert trends.status_code == 200
+    assert insights.status_code == 200
+    assert insights.json()["project_name"] == "Metro Project"
+    assert schedule.status_code == 200
+    assert schedule.json()["project_name"] == "Metro Project"
+    assert schedule_history.status_code == 200
+    assert schedule_history.json()["project_name"] == "Metro Project"
+    assert issue_history.status_code == 200
+    assert issue_history.json()["project_name"] == "Metro Project"
+
+
 def test_upload_records_extracted_report_once(tmp_path, monkeypatch):
     upload_module = importlib.import_module("app.api.upload")
     app.state.analysis_service = AnalysisService()

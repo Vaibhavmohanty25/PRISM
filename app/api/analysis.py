@@ -30,7 +30,7 @@ def _require_project(
     service: AnalysisService,
     project_name: str,
 ) -> None:
-    if project_name not in service.get_projects():
+    if not service.has_project(project_name):
         raise HTTPException(
             status_code=404,
             detail=f"Unknown project: {project_name}",

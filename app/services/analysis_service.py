@@ -47,6 +47,9 @@ class AnalysisService:
     def get_projects(self) -> list[str]:
         return self.tracker.get_projects()
 
+    def has_project(self, project_name: str | None) -> bool:
+        return self.tracker.has_project(project_name)
+
     def get_activity_history(
         self,
         project_name: str | None,

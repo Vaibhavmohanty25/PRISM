@@ -188,7 +188,7 @@ class InsightAnalyzer:
         self,
         project_name: str | None,
     ) -> ProjectInsight | None:
-        if project_name not in self.tracker.get_projects():
+        if not self.tracker.has_project(project_name):
             return None
 
         histories = self.tracker.get_all_histories(project_name)
