@@ -274,6 +274,75 @@ ForecastStatus = Literal[
 ]
 
 
+ConfidenceAssessmentStatus = Literal[
+    "assessed",
+    "not_assessed",
+    "not_applicable",
+]
+
+ConfidenceLevel = Literal[
+    "low",
+    "medium",
+    "high",
+]
+
+VelocityStability = Literal[
+    "not_assessable",
+    "stable",
+    "variable",
+    "unstable",
+]
+
+DirectionConsistency = Literal[
+    "positive",
+    "mixed",
+    "non_positive",
+    "not_assessable",
+]
+
+DateQuality = Literal[
+    "complete",
+    "submission_order_fallback",
+    "unusable",
+]
+
+
+class ForecastConfidence(BaseModel):
+    """Deterministic quality assessment of forecast evidence."""
+
+    assessment_status: ConfidenceAssessmentStatus
+
+    level: ConfidenceLevel | None = None
+
+    total_snapshot_count: int = Field(ge=0)
+
+    usable_observation_count: int = Field(ge=0)
+
+    missing_progress_count: int = Field(ge=0)
+
+    interval_count: int = Field(ge=0)
+
+    valid_velocity_interval_count: int = Field(ge=0)
+
+    zero_day_gap_count: int = Field(ge=0)
+
+    positive_interval_count: int = Field(ge=0)
+
+    zero_interval_count: int = Field(ge=0)
+
+    negative_interval_count: int = Field(ge=0)
+
+    velocity_stability: VelocityStability
+
+    direction_consistency: DirectionConsistency
+
+    date_quality: DateQuality
+
+    evidence: list[str] = Field(default_factory=list)
+
+    data_note: str | None = None
+
+
 class ForecastResult(BaseModel):
     """Deterministic activity completion estimate from observed history."""
 
@@ -304,6 +373,8 @@ class ForecastResult(BaseModel):
     evidence: list[str] = Field(default_factory=list)
 
     data_note: str | None = None
+
+    confidence: ForecastConfidence | None = None
 
 
 RiskLevel = Literal[

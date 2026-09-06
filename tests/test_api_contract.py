@@ -271,6 +271,10 @@ def test_activity_forecast_endpoint_returns_typed_result_and_404s(client):
     assert body["forecast_method"] == "net_observed_progress_velocity"
     assert body["estimated_completion_date"] == "2025-07-12"
     assert body["evidence"]
+    assert body["confidence"]["assessment_status"] == "assessed"
+    assert body["confidence"]["level"] == "low"
+    assert body["confidence"]["usable_observation_count"] == 2
+    assert body["confidence"]["interval_count"] == 1
 
     unknown_project = client.get(
         "/api/v1/projects/Unknown/activities/Task/forecast"
@@ -295,3 +299,13 @@ def test_activity_forecast_response_model_is_exposed_in_openapi(client):
     assert response["content"]["application/json"]["schema"]["$ref"].endswith(
         "/ForecastResult"
     )
+
+    forecast_schema = schema["components"]["schemas"]["ForecastResult"]
+    confidence_schema = forecast_schema["properties"]["confidence"]
+    assert any(
+        item.get("$ref", "").endswith("/ForecastConfidence")
+        for item in confidence_schema["anyOf"]
+    )
+    assert "/api/v1/projects/{project_name}/activities/{activity_name}/forecast-confidence" not in schema[
+        "paths"
+    ]

@@ -22,6 +22,7 @@ from app.services.issue_evidence_analyzer import IssueEvidenceAnalyzer
 from app.services.schedule_impact_analyzer import ScheduleImpactAnalyzer
 from app.services.trend_analyzer import TrendAnalyzer
 from app.services.forecast_analyzer import ForecastAnalyzer
+from app.services.forecast_confidence_analyzer import ForecastConfidenceAnalyzer
 
 
 class AnalysisService:
@@ -31,6 +32,7 @@ class AnalysisService:
         self.tracker = tracker or ProgressTracker()
         self.trend_analyzer = TrendAnalyzer(self.tracker)
         self.forecast_analyzer = ForecastAnalyzer(self.tracker)
+        self.forecast_confidence_analyzer = ForecastConfidenceAnalyzer()
         self.risk_analyzer = RiskAnalyzer(self.tracker)
         self.insight_analyzer = InsightAnalyzer(
             self.tracker,
@@ -84,10 +86,25 @@ class AnalysisService:
         project_name: str | None,
         activity_name: str,
     ) -> ForecastResult | None:
-        return self.forecast_analyzer.analyze_activity(
+        forecast = self.forecast_analyzer.analyze_activity(
             project_name,
             activity_name,
         )
+        if forecast is None:
+            return None
+
+        history = self.tracker.get_activity_history(
+            project_name,
+            activity_name,
+        )
+        if history is None:
+            return forecast
+
+        confidence = self.forecast_confidence_analyzer.analyze_history(
+            history,
+            forecast,
+        )
+        return forecast.model_copy(update={"confidence": confidence})
 
     def analyze_activity_risk(
         self,
