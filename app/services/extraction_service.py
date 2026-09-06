@@ -1,3 +1,5 @@
+import re
+
 from google import genai
 
 from app.schemas.project_data import (
@@ -20,6 +22,111 @@ class ExtractionService:
         self.client = genai.Client(
             api_key=api_key
         )
+
+    @staticmethod
+    def _explicit_activity_names(raw_content: str) -> list[str]:
+        names = re.findall(
+            r"(?im)^\s*Activity\s*:\s*(.+?)\s*$",
+            raw_content,
+        )
+        return list(dict.fromkeys(
+            name.strip().casefold()
+            for name in names
+            if name.strip()
+        ))
+
+    @staticmethod
+    def _explicit_activity_evidence(
+        raw_content: str,
+    ) -> dict[str, dict[str, bool]]:
+        matches = list(re.finditer(
+            r"(?im)^\s*Activity\s*:\s*(.+?)\s*$",
+            raw_content,
+        ))
+        evidence = {}
+
+        for index, match in enumerate(matches):
+            block_end = (
+                matches[index + 1].start()
+                if index + 1 < len(matches)
+                else len(raw_content)
+            )
+            block = raw_content[match.end():block_end]
+            delay_hours = re.search(
+                r"(?i)\b(\d+(?:\.\d+)?)\s*hours?\b",
+                block,
+            )
+            positive_delay = bool(
+                delay_hours and float(delay_hours.group(1)) > 0
+            )
+
+            evidence[match.group(1).strip().casefold()] = {
+                "progress": bool(re.search(
+                    r"(?i)\b\d+(?:\.\d+)?\s*(?:%|percent)\b",
+                    block,
+                )),
+                "delay_duration": bool(re.search(
+                    r"(?i)\b(?:delay|delayed)\b",
+                    block,
+                )) and delay_hours is not None,
+                "delay_reason": positive_delay,
+                "issues": bool(re.search(
+                    r"(?im)^\s*Issue\s*:",
+                    block,
+                )),
+            }
+
+        return evidence
+
+    @classmethod
+    def _response_is_incomplete(
+        cls,
+        raw_content: str,
+        ai_result: AIActivityExtraction,
+    ) -> bool:
+        expected_names = cls._explicit_activity_names(raw_content)
+
+        if not expected_names:
+            return False
+
+        actual_names = {
+            activity.activity_name.strip().casefold()
+            for activity in ai_result.activities
+            if activity.activity_name.strip()
+        }
+
+        if any(
+            expected_name not in actual_names
+            for expected_name in expected_names
+        ):
+            return True
+
+        actual_by_name = {
+            activity.activity_name.strip().casefold(): activity
+            for activity in ai_result.activities
+        }
+        for name, expected_evidence in cls._explicit_activity_evidence(
+            raw_content
+        ).items():
+            activity = actual_by_name.get(name)
+            if activity is None:
+                return True
+            if expected_evidence["progress"] and (
+                activity.progress_percentage is None
+            ):
+                return True
+            if expected_evidence["delay_duration"] and (
+                activity.delay_duration_hours is None
+            ):
+                return True
+            if expected_evidence["delay_reason"] and (
+                activity.delay_reason is None
+            ):
+                return True
+            if expected_evidence["issues"] and not activity.issues:
+                return True
+
+        return False
 
     def extract_progress_report(
         self,
@@ -591,6 +698,10 @@ Before returning the JSON, verify:
 
 12. The response matches the requested schema.
 
+13. For each activity, map every explicit progress, delay, and issue
+    statement from that activity's source block into the corresponding
+    fields. Use null or [] only when that evidence is absent.
+
 
 ========================================================
 SOURCE DOCUMENT
@@ -607,14 +718,17 @@ SOURCE DOCUMENT
         # STEP 3: Call Gemini
         # ------------------------------------------------
 
+        response_format = {
+            "type": "text",
+            "mime_type": "application/json",
+            "schema": AIActivityExtraction.model_json_schema(),
+        }
+
         interaction = self.client.interactions.create(
             model="gemini-3.6-flash",
             input=prompt,
-            response_format={
-                "type": "text",
-                "mime_type": "application/json",
-                "schema": AIActivityExtraction.model_json_schema(),
-            },
+            response_format=response_format,
+            generation_config={"temperature": 0},
         )
 
         # ------------------------------------------------
@@ -631,6 +745,38 @@ SOURCE DOCUMENT
                 interaction.output_text
             )
         )
+
+        if self._response_is_incomplete(raw_content, ai_result):
+            retry_prompt = f"""
+The previous extraction was incomplete. Re-read the SOURCE DOCUMENT and
+return one object for EVERY activity explicitly identified in the source.
+Do not omit activities, even when their fields are null. Map every explicit
+progress, delay, and issue statement from each activity block. Preserve all
+activity-specific evidence and use null or [] only when evidence is absent.
+Return only JSON matching the requested schema.
+
+{prompt}
+"""
+            retry_interaction = self.client.interactions.create(
+                model="gemini-3.6-flash",
+                input=retry_prompt,
+                response_format=response_format,
+                generation_config={"temperature": 0},
+            )
+
+            if not retry_interaction.output_text:
+                raise ValueError(
+                    "Gemini returned an empty recovery response"
+                )
+
+            ai_result = AIActivityExtraction.model_validate_json(
+                retry_interaction.output_text
+            )
+
+            if self._response_is_incomplete(raw_content, ai_result):
+                raise ValueError(
+                    "Gemini returned an incomplete activity extraction"
+                )
 
         # ------------------------------------------------
         # STEP 5: Build final ProgressReport
