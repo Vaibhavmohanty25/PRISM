@@ -343,6 +343,29 @@ class ForecastConfidence(BaseModel):
     data_note: str | None = None
 
 
+PredictiveRiskLevel = Literal[
+    "low",
+    "medium",
+    "high",
+    "not_assessed",
+    "not_applicable",
+]
+
+
+class PredictiveRisk(BaseModel):
+    """Deterministic forward-looking trajectory assessment."""
+
+    project_name: str
+
+    activity_name: str
+
+    level: PredictiveRiskLevel
+
+    evidence: list[str] = Field(default_factory=list)
+
+    data_note: str | None = None
+
+
 class ForecastResult(BaseModel):
     """Deterministic activity completion estimate from observed history."""
 
@@ -375,6 +398,8 @@ class ForecastResult(BaseModel):
     data_note: str | None = None
 
     confidence: ForecastConfidence | None = None
+
+    predictive_risk: PredictiveRisk | None = None
 
 
 RiskLevel = Literal[

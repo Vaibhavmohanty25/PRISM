@@ -275,6 +275,7 @@ def test_activity_forecast_endpoint_returns_typed_result_and_404s(client):
     assert body["confidence"]["level"] == "low"
     assert body["confidence"]["usable_observation_count"] == 2
     assert body["confidence"]["interval_count"] == 1
+    assert body["predictive_risk"]["level"] == "not_assessed"
 
     unknown_project = client.get(
         "/api/v1/projects/Unknown/activities/Task/forecast"
@@ -307,5 +308,26 @@ def test_activity_forecast_response_model_is_exposed_in_openapi(client):
         for item in confidence_schema["anyOf"]
     )
     assert "/api/v1/projects/{project_name}/activities/{activity_name}/forecast-confidence" not in schema[
+        "paths"
+    ]
+    predictive_risk_schema = forecast_schema["properties"]["predictive_risk"]
+    assert any(
+        item.get("$ref", "").endswith("/PredictiveRisk")
+        for item in predictive_risk_schema["anyOf"]
+    )
+    predictive_risk_level = schema["components"]["schemas"]["PredictiveRisk"][
+        "properties"
+    ]["level"]
+    assert predictive_risk_level["enum"] == [
+        "low",
+        "medium",
+        "high",
+        "not_assessed",
+        "not_applicable",
+    ]
+    assert "/api/v1/projects/{project_name}/activities/{activity_name}/predictive-risk" not in schema[
+        "paths"
+    ]
+    assert "/api/v1/projects/{project_name}/predictive-risks" not in schema[
         "paths"
     ]

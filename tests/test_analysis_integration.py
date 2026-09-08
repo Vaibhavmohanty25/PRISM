@@ -79,6 +79,158 @@ def test_insufficient_history_returns_typed_analysis_results():
     assert risk.risk_level == "insufficient_data"
 
 
+def test_forecast_composition_adds_predictive_risk_without_changing_existing_results():
+    service = AnalysisService()
+    first = _report(
+        report_date="1 June 2025",
+        progress=35,
+        project_name="  Metro Project  ",
+        activity_name=" Foundation RCC work ",
+    )
+    second = ProgressReport(
+        project_name="metro project",
+        report_date="15 June 2025",
+        activities=[
+            ActivityProgress(
+                activity_name="Foundation RCC work",
+                progress_percentage=57,
+                issues=["Access problem"],
+                delay_reason="Rain",
+            )
+        ],
+    )
+    service.record_report(first)
+    service.record_report(second)
+
+    direct = service.forecast_analyzer.analyze_activity(
+        " METRO PROJECT ",
+        "foundation rcc work",
+    )
+    composed = service.analyze_activity_forecast(
+        " METRO PROJECT ",
+        "foundation rcc work",
+    )
+    observed_risk = service.analyze_activity_risk(
+        " METRO PROJECT ",
+        "foundation rcc work",
+    )
+
+    assert direct is not None
+    assert composed is not None
+    assert observed_risk is not None
+    assert composed.predictive_risk is not None
+    assert composed.predictive_risk.level == "not_assessed"
+    assert composed.confidence is not None
+    assert {
+        field: getattr(composed, field)
+        for field in (
+            "status",
+            "current_progress",
+            "remaining_progress",
+            "historical_velocity_per_day",
+            "estimated_days_to_completion",
+            "estimated_completion_date",
+            "observation_count",
+            "first_report_date",
+            "latest_report_date",
+            "forecast_method",
+            "evidence",
+            "data_note",
+        )
+    } == {
+        field: getattr(direct, field)
+        for field in (
+            "status",
+            "current_progress",
+            "remaining_progress",
+            "historical_velocity_per_day",
+            "estimated_days_to_completion",
+            "estimated_completion_date",
+            "observation_count",
+            "first_report_date",
+            "latest_report_date",
+            "forecast_method",
+            "evidence",
+            "data_note",
+        )
+    }
+    assert observed_risk.risk_level == "low"
+
+
+def test_duplicate_reports_do_not_change_predictive_risk():
+    service = AnalysisService()
+    report_one = _report(report_date="1 June 2025", progress=35)
+    report_two = _report(report_date="15 June 2025", progress=57)
+
+    service.record_report(report_one)
+    service.record_report(report_two)
+    first = service.analyze_activity_forecast(
+        "Metro Project",
+        "Foundation RCC work",
+    )
+    service.record_report(report_two)
+    second = service.analyze_activity_forecast(
+        " metro project ",
+        "foundation rcc work",
+    )
+
+    assert first is not None
+    assert second is not None
+    assert first.predictive_risk == second.predictive_risk
+
+
+def test_issue_and_delay_fields_do_not_change_predictive_risk():
+    baseline = AnalysisService()
+    with_evidence = AnalysisService()
+    reports = (
+        _report(report_date="1 June 2025", progress=35),
+        _report(report_date="15 June 2025", progress=57),
+    )
+    evidence_reports = (
+        ProgressReport(
+            project_name="Metro Project",
+            report_date="1 June 2025",
+            activities=[
+                ActivityProgress(
+                    activity_name="Foundation RCC work",
+                    progress_percentage=35,
+                    issues=["Access problem"],
+                    delay_reason="Rain",
+                )
+            ],
+        ),
+        ProgressReport(
+            project_name="Metro Project",
+            report_date="15 June 2025",
+            activities=[
+                ActivityProgress(
+                    activity_name="Foundation RCC work",
+                    progress_percentage=57,
+                    issues=["Material shortage"],
+                    delay_reason="Equipment failure",
+                )
+            ],
+        ),
+    )
+    for report in reports:
+        baseline.record_report(report)
+    for report in evidence_reports:
+        with_evidence.record_report(report)
+
+    baseline_result = baseline.analyze_activity_forecast(
+        "Metro Project",
+        "Foundation RCC work",
+    )
+    evidence_result = with_evidence.analyze_activity_forecast(
+        "Metro Project",
+        "Foundation RCC work",
+    )
+
+    assert baseline_result is not None
+    assert evidence_result is not None
+    assert evidence_result.predictive_risk == baseline_result.predictive_risk
+
+
 def test_analysis_endpoints_return_results_and_404_for_unknown_resources():
     app.state.analysis_service = AnalysisService()
     service = app.state.analysis_service

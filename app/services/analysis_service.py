@@ -23,6 +23,7 @@ from app.services.schedule_impact_analyzer import ScheduleImpactAnalyzer
 from app.services.trend_analyzer import TrendAnalyzer
 from app.services.forecast_analyzer import ForecastAnalyzer
 from app.services.forecast_confidence_analyzer import ForecastConfidenceAnalyzer
+from app.services.predictive_risk_analyzer import PredictiveRiskAnalyzer
 
 
 class AnalysisService:
@@ -33,6 +34,7 @@ class AnalysisService:
         self.trend_analyzer = TrendAnalyzer(self.tracker)
         self.forecast_analyzer = ForecastAnalyzer(self.tracker)
         self.forecast_confidence_analyzer = ForecastConfidenceAnalyzer()
+        self.predictive_risk_analyzer = PredictiveRiskAnalyzer()
         self.risk_analyzer = RiskAnalyzer(self.tracker)
         self.insight_analyzer = InsightAnalyzer(
             self.tracker,
@@ -104,7 +106,11 @@ class AnalysisService:
             history,
             forecast,
         )
-        return forecast.model_copy(update={"confidence": confidence})
+        composed = forecast.model_copy(update={"confidence": confidence})
+        predictive_risk = self.predictive_risk_analyzer.analyze(composed)
+        return composed.model_copy(
+            update={"predictive_risk": predictive_risk}
+        )
 
     def analyze_activity_risk(
         self,
