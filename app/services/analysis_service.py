@@ -4,10 +4,17 @@ from app.schemas.project_data import (
     ActivityInsight,
     ActivityHistory,
     DecisionSupport,
+    DecisionSupportPriorityDistribution,
+    DecisionSupportStatusDistribution,
+    ConfidenceLevelDistribution,
     ForecastResult,
+    ForecastStatusDistribution,
     ActivityScheduleImpact,
     ActivityScheduleImpactHistory,
     ActivityIssueHistory,
+    PredictiveRiskDistribution,
+    ProjectPredictiveActivity,
+    ProjectPredictiveSummary,
     ProjectInsight,
     ProjectIssueHistory,
     ProjectScheduleImpact,
@@ -236,6 +243,297 @@ class AnalysisService:
     ) -> ProjectIssueHistory | None:
         return self.issue_evidence_analyzer.history_for_project(
             project_name,
+        )
+
+    def analyze_project_predictive_summary(
+        self,
+        project_name: str | None,
+    ) -> ProjectPredictiveSummary | None:
+        if not self.has_project(project_name):
+            return None
+
+        histories = self.tracker.get_all_histories(project_name)
+        references: list[tuple[ProjectPredictiveActivity, bool, bool]] = []
+
+        for history in histories:
+            forecast = self.analyze_activity_forecast(
+                project_name,
+                history.activity_name,
+            )
+            trend = self.trend_analyzer.analyze_history(history)
+            risk = self.risk_analyzer.analyze_history(history)
+            schedule_impact = self.schedule_impact_analyzer.analyze_history(
+                history
+            )
+            issue_history = self.issue_evidence_analyzer.history_for_activity(
+                project_name,
+                history.activity_name,
+            )
+            decision_support = self.decision_support_analyzer.analyze(
+                trend,
+                risk,
+                forecast,
+                schedule_impact,
+                issue_history,
+            )
+
+            reference, completed, insufficient = self._project_predictive_activity(
+                history.activity_name,
+                forecast,
+                decision_support,
+            )
+            references.append((reference, completed, insufficient))
+
+        ordered_references = [item[0] for item in references]
+        attention = [
+            reference
+            for reference, completed, _ in references
+            if not completed
+            and reference.decision_support_response
+            in {"investigate", "review", "verify_data"}
+        ]
+        insufficient = [
+            reference
+            for reference, completed, is_insufficient in references
+            if not completed and is_insufficient
+        ]
+        attention.sort(key=self._attention_sort_key)
+        insufficient.sort(key=self._insufficient_sort_key)
+
+        return ProjectPredictiveSummary(
+            project_name=(
+                histories[0].project_name
+                if histories
+                else project_name or ""
+            ),
+            total_activity_count=len(ordered_references),
+            active_activity_count=sum(
+                not completed for _, completed, _ in references
+            ),
+            completed_activity_count=sum(
+                completed for _, completed, _ in references
+            ),
+            forecast_status_distribution=ForecastStatusDistribution(
+                **self._count_values(
+                    ordered_references,
+                    "forecast_status",
+                    ("available", "insufficient_data", "unavailable"),
+                )
+            ),
+            confidence_level_distribution=ConfidenceLevelDistribution(
+                **self._confidence_counts(ordered_references)
+            ),
+            predictive_risk_distribution=PredictiveRiskDistribution(
+                **self._count_values(
+                    ordered_references,
+                    "predictive_risk_level",
+                    ("low", "medium", "high", "not_assessed", "not_applicable"),
+                )
+            ),
+            decision_support_status_distribution=DecisionSupportStatusDistribution(
+                **self._count_values(
+                    ordered_references,
+                    "decision_support_status",
+                    ("supported", "review_only", "insufficient_evidence", "not_applicable"),
+                )
+            ),
+            decision_support_priority_distribution=DecisionSupportPriorityDistribution(
+                **self._count_values(
+                    ordered_references,
+                    "decision_support_priority",
+                    ("none", "low", "medium", "high"),
+                )
+            ),
+            activities_requiring_attention=attention,
+            activities_with_insufficient_evidence=insufficient,
+            evidence_limitations=self._summary_limitations(
+                references
+            ),
+        )
+
+    @staticmethod
+    def _project_predictive_activity(
+        activity_name: str,
+        forecast: ForecastResult | None,
+        decision_support: DecisionSupport,
+    ) -> tuple[ProjectPredictiveActivity, bool, bool]:
+        confidence = forecast.confidence if forecast is not None else None
+        predictive_risk = (
+            forecast.predictive_risk
+            if forecast is not None
+            else None
+        )
+        completed = (
+            forecast is not None
+            and forecast.current_progress == 100
+        )
+        confidence_status = (
+            confidence.assessment_status
+            if confidence is not None
+            else "not_assessed"
+        )
+        confidence_level = (
+            confidence.level
+            if confidence is not None
+            else None
+        )
+        predictive_level = (
+            predictive_risk.level
+            if predictive_risk is not None
+            else "not_assessed"
+        )
+        forecast_status = (
+            forecast.status
+            if forecast is not None
+            else "unavailable"
+        )
+
+        limitations: list[str] = list(decision_support.limitations)
+        if forecast is None:
+            limitations.append("No forecast result was available.")
+        else:
+            if forecast.data_note:
+                limitations.append(forecast.data_note)
+            if confidence is not None and confidence.data_note:
+                limitations.append(confidence.data_note)
+            if predictive_risk is not None and predictive_risk.data_note:
+                limitations.append(predictive_risk.data_note)
+
+        limitations = AnalysisService._deduplicate(limitations)
+        insufficient = (
+            forecast is None
+            or forecast.status != "available"
+            or confidence is None
+            or confidence.assessment_status == "not_assessed"
+            or predictive_level == "not_assessed"
+            or decision_support.status == "insufficient_evidence"
+        )
+
+        reference = ProjectPredictiveActivity(
+            activity_name=activity_name,
+            forecast_status=forecast_status,
+            confidence_assessment_status=confidence_status,
+            confidence_level=confidence_level,
+            predictive_risk_level=predictive_level,
+            decision_support_status=decision_support.status,
+            decision_support_priority=decision_support.priority,
+            decision_support_response=decision_support.response,
+            decision_support_trigger=decision_support.trigger,
+            limitations=limitations,
+        )
+        return reference, completed, insufficient
+
+    @staticmethod
+    def _count_values(
+        references: list[ProjectPredictiveActivity],
+        field: str,
+        keys: tuple[str, ...],
+        *,
+        fallback: str | None = None,
+    ) -> dict[str, int]:
+        counts = {key: 0 for key in keys}
+        for reference in references:
+            value = getattr(reference, field)
+            if value is None and fallback is not None:
+                value = fallback
+            if value in counts:
+                counts[value] += 1
+        return counts
+
+    @staticmethod
+    def _confidence_counts(
+        references: list[ProjectPredictiveActivity],
+    ) -> dict[str, int]:
+        counts = {
+            "high": 0,
+            "medium": 0,
+            "low": 0,
+            "not_assessed": 0,
+            "not_applicable": 0,
+        }
+        for reference in references:
+            if reference.confidence_assessment_status == "not_applicable":
+                counts["not_applicable"] += 1
+            elif (
+                reference.confidence_assessment_status == "not_assessed"
+                or reference.confidence_level is None
+            ):
+                counts["not_assessed"] += 1
+            else:
+                counts[reference.confidence_level] += 1
+        return counts
+
+    @staticmethod
+    def _deduplicate(values: list[str]) -> list[str]:
+        result: list[str] = []
+        for value in values:
+            if value and value not in result:
+                result.append(value)
+        return result
+
+    @classmethod
+    def _summary_limitations(
+        cls,
+        references: list[tuple[ProjectPredictiveActivity, bool, bool]],
+    ) -> list[str]:
+        limitations: list[str] = []
+        for reference, completed, _ in references:
+            if completed:
+                continue
+            limitations.extend(reference.limitations)
+        return cls._deduplicate(limitations)
+
+    @staticmethod
+    def _attention_sort_key(
+        reference: ProjectPredictiveActivity,
+    ) -> tuple[int, int, int, str]:
+        return (
+            {"high": 0, "medium": 1, "low": 2, "none": 3}[
+                reference.decision_support_priority
+            ],
+            {
+                "investigate": 0,
+                "review": 1,
+                "verify_data": 2,
+                "monitor": 3,
+                "none": 4,
+            }[reference.decision_support_response],
+            {
+                "high": 0,
+                "medium": 1,
+                "low": 2,
+                "not_assessed": 3,
+                "not_applicable": 4,
+            }[reference.predictive_risk_level],
+            reference.activity_name.casefold(),
+        )
+
+    @staticmethod
+    def _insufficient_sort_key(
+        reference: ProjectPredictiveActivity,
+    ) -> tuple[int, int, int, int, str]:
+        return (
+            {
+                "unavailable": 0,
+                "insufficient_data": 1,
+                "available": 2,
+            }[reference.forecast_status],
+            {
+                "not_assessed": 0,
+                "assessed": 1,
+                "not_applicable": 2,
+            }[reference.confidence_assessment_status],
+            {
+                "not_assessed": 0,
+                "high": 1,
+                "medium": 2,
+                "low": 3,
+                "not_applicable": 4,
+            }[reference.predictive_risk_level],
+            {"high": 0, "medium": 1, "low": 2, "none": 3}[
+                reference.decision_support_priority
+            ],
+            reference.activity_name.casefold(),
         )
 
 

@@ -6,6 +6,7 @@ from app.schemas.project_data import (
     ActivityHistory,
     DecisionSupport,
     ForecastResult,
+    ProjectPredictiveSummary,
     ActivityScheduleImpact,
     ActivityScheduleImpactHistory,
     ProjectScheduleImpact,
@@ -44,6 +45,26 @@ def get_projects(
     service: AnalysisService = Depends(get_analysis_service),
 ) -> ProjectsResponse:
     return {"projects": service.get_projects()}
+
+
+@router.get(
+    "/projects/{project_name}/predictive-summary",
+    response_model=ProjectPredictiveSummary,
+)
+def get_project_predictive_summary(
+    project_name: str,
+    service: AnalysisService = Depends(get_analysis_service),
+) -> ProjectPredictiveSummary:
+    _require_project(service, project_name)
+    result = service.analyze_project_predictive_summary(project_name)
+
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Unknown project: {project_name}",
+        )
+
+    return result
 
 
 @router.get(

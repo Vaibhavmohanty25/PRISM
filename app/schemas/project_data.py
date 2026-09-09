@@ -421,6 +421,114 @@ class DecisionSupport(BaseModel):
     limitations: list[str] = Field(default_factory=list)
 
 
+class ForecastStatusDistribution(BaseModel):
+    available: int = Field(default=0, ge=0)
+
+    insufficient_data: int = Field(default=0, ge=0)
+
+    unavailable: int = Field(default=0, ge=0)
+
+
+class ConfidenceLevelDistribution(BaseModel):
+    high: int = Field(default=0, ge=0)
+
+    medium: int = Field(default=0, ge=0)
+
+    low: int = Field(default=0, ge=0)
+
+    not_assessed: int = Field(default=0, ge=0)
+
+    not_applicable: int = Field(default=0, ge=0)
+
+
+class PredictiveRiskDistribution(BaseModel):
+    low: int = Field(default=0, ge=0)
+
+    medium: int = Field(default=0, ge=0)
+
+    high: int = Field(default=0, ge=0)
+
+    not_assessed: int = Field(default=0, ge=0)
+
+    not_applicable: int = Field(default=0, ge=0)
+
+
+class DecisionSupportStatusDistribution(BaseModel):
+    supported: int = Field(default=0, ge=0)
+
+    review_only: int = Field(default=0, ge=0)
+
+    insufficient_evidence: int = Field(default=0, ge=0)
+
+    not_applicable: int = Field(default=0, ge=0)
+
+
+class DecisionSupportPriorityDistribution(BaseModel):
+    none: int = Field(default=0, ge=0)
+
+    low: int = Field(default=0, ge=0)
+
+    medium: int = Field(default=0, ge=0)
+
+    high: int = Field(default=0, ge=0)
+
+
+class ProjectPredictiveActivity(BaseModel):
+    """Compact activity evidence reference used by a project summary."""
+
+    activity_name: str
+
+    forecast_status: ForecastStatus
+
+    confidence_assessment_status: ConfidenceAssessmentStatus
+
+    confidence_level: ConfidenceLevel | None = None
+
+    predictive_risk_level: PredictiveRiskLevel
+
+    decision_support_status: DecisionSupportStatus
+
+    decision_support_priority: DecisionSupportPriority
+
+    decision_support_response: DecisionSupportResponse
+
+    decision_support_trigger: DecisionSupportTrigger
+
+    limitations: list[str] = Field(default_factory=list)
+
+
+class ProjectPredictiveSummary(BaseModel):
+    """Deterministic aggregation of existing activity-level intelligence."""
+
+    project_name: str
+
+    total_activity_count: int = Field(ge=0)
+
+    active_activity_count: int = Field(ge=0)
+
+    completed_activity_count: int = Field(ge=0)
+
+    forecast_status_distribution: ForecastStatusDistribution
+
+    confidence_level_distribution: ConfidenceLevelDistribution
+
+    predictive_risk_distribution: PredictiveRiskDistribution
+
+    decision_support_status_distribution: DecisionSupportStatusDistribution
+
+    decision_support_priority_distribution: DecisionSupportPriorityDistribution
+
+    activities_requiring_attention: list[ProjectPredictiveActivity] = Field(
+        default_factory=list
+    )
+
+    activities_with_insufficient_evidence: list[ProjectPredictiveActivity] = Field(
+        default_factory=list
+    )
+
+    evidence_limitations: list[str] = Field(default_factory=list)
+
+
 class ForecastResult(BaseModel):
     """Deterministic activity completion estimate from observed history."""
 
