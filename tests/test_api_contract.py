@@ -276,12 +276,51 @@ def test_activity_forecast_endpoint_returns_typed_result_and_404s(client):
     assert body["confidence"]["usable_observation_count"] == 2
     assert body["confidence"]["interval_count"] == 1
     assert body["predictive_risk"]["level"] == "not_assessed"
+    assert "decision_support" not in body
 
     unknown_project = client.get(
         "/api/v1/projects/Unknown/activities/Task/forecast"
     )
     unknown_activity = client.get(
         "/api/v1/projects/Metro%20Project/activities/Unknown/forecast"
+    )
+
+    assert unknown_project.status_code == 404
+    assert unknown_activity.status_code == 404
+    assert _error_body(unknown_project)["code"] == "project_not_found"
+    assert _error_body(unknown_activity)["code"] == "activity_not_found"
+
+
+def test_activity_decision_support_endpoint_returns_typed_result_and_404s(client):
+    app.state.analysis_service.record_report(
+        ProgressReport(
+            project_name="Metro Project",
+            report_date="1 June 2025",
+            activities=[
+                ActivityProgress(
+                    activity_name="Foundation RCC work",
+                    progress_percentage=35,
+                )
+            ],
+        )
+    )
+
+    response = client.get(
+        "/api/v1/projects/Metro%20Project/activities/"
+        "Foundation%20RCC%20work/decision-support"
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["project_name"] == "Metro Project"
+    assert body["activity_name"] == "Foundation RCC work"
+    assert body["trigger"] == "data_quality"
+
+    unknown_project = client.get(
+        "/api/v1/projects/Unknown/activities/Task/decision-support"
+    )
+    unknown_activity = client.get(
+        "/api/v1/projects/Metro%20Project/activities/Unknown/decision-support"
     )
 
     assert unknown_project.status_code == 404
@@ -329,5 +368,15 @@ def test_activity_forecast_response_model_is_exposed_in_openapi(client):
         "paths"
     ]
     assert "/api/v1/projects/{project_name}/predictive-risks" not in schema[
+        "paths"
+    ]
+    decision_support_response = schema["paths"][
+        "/api/v1/projects/{project_name}/activities/{activity_name}/decision-support"
+    ]["get"]["responses"]["200"]
+    assert decision_support_response["content"]["application/json"]["schema"][
+        "$ref"
+    ].endswith("/DecisionSupport")
+    assert "decision_support" not in forecast_schema["properties"]
+    assert "/api/v1/projects/{project_name}/decision-support" not in schema[
         "paths"
     ]

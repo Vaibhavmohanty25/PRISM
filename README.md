@@ -85,6 +85,7 @@ The following settings can be provided through environment variables or `.env`:
 | GET | `/api/v1/projects/{project_name}/trends` | Project activity trends |
 | GET | `/api/v1/projects/{project_name}/activities/{activity_name}/trend` | Activity trend |
 | GET | `/api/v1/projects/{project_name}/activities/{activity_name}/forecast` | Activity forecast |
+| GET | `/api/v1/projects/{project_name}/activities/{activity_name}/decision-support` | Activity-level bounded decision support |
 | GET | `/api/v1/projects/{project_name}/risks` | Project activity risks |
 | GET | `/api/v1/projects/{project_name}/activities/{activity_name}/risk` | Activity risk |
 | GET | `/api/v1/projects/{project_name}/insights` | Project explainable insights |

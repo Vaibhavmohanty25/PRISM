@@ -120,6 +120,14 @@ def test_forecast_composition_adds_predictive_risk_without_changing_existing_res
     assert observed_risk is not None
     assert composed.predictive_risk is not None
     assert composed.predictive_risk.level == "not_assessed"
+    assert not hasattr(composed, "decision_support")
+    decision_support = service.analyze_activity_decision_support(
+        " METRO PROJECT ",
+        "foundation rcc work",
+    )
+    assert decision_support is not None
+    assert decision_support.status == "review_only"
+    assert decision_support.trigger == "schedule_impact"
     assert composed.confidence is not None
     assert {
         field: getattr(composed, field)

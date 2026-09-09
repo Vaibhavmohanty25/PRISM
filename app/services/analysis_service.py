@@ -3,6 +3,7 @@ from fastapi import Request
 from app.schemas.project_data import (
     ActivityInsight,
     ActivityHistory,
+    DecisionSupport,
     ForecastResult,
     ActivityScheduleImpact,
     ActivityScheduleImpactHistory,
@@ -24,6 +25,7 @@ from app.services.trend_analyzer import TrendAnalyzer
 from app.services.forecast_analyzer import ForecastAnalyzer
 from app.services.forecast_confidence_analyzer import ForecastConfidenceAnalyzer
 from app.services.predictive_risk_analyzer import PredictiveRiskAnalyzer
+from app.services.decision_support_analyzer import DecisionSupportAnalyzer
 
 
 class AnalysisService:
@@ -35,6 +37,7 @@ class AnalysisService:
         self.forecast_analyzer = ForecastAnalyzer(self.tracker)
         self.forecast_confidence_analyzer = ForecastConfidenceAnalyzer()
         self.predictive_risk_analyzer = PredictiveRiskAnalyzer()
+        self.decision_support_analyzer = DecisionSupportAnalyzer()
         self.risk_analyzer = RiskAnalyzer(self.tracker)
         self.insight_analyzer = InsightAnalyzer(
             self.tracker,
@@ -108,8 +111,45 @@ class AnalysisService:
         )
         composed = forecast.model_copy(update={"confidence": confidence})
         predictive_risk = self.predictive_risk_analyzer.analyze(composed)
-        return composed.model_copy(
+        composed = composed.model_copy(
             update={"predictive_risk": predictive_risk}
+        )
+        return composed
+
+    def analyze_activity_decision_support(
+        self,
+        project_name: str | None,
+        activity_name: str,
+    ) -> DecisionSupport | None:
+        forecast = self.analyze_activity_forecast(
+            project_name,
+            activity_name,
+        )
+        if forecast is None:
+            return None
+
+        history = self.tracker.get_activity_history(
+            project_name,
+            activity_name,
+        )
+        if history is None:
+            return None
+
+        trend_result = self.trend_analyzer.analyze_history(history)
+        risk_result = self.risk_analyzer.analyze_history(history)
+        schedule_impact = self.schedule_impact_analyzer.analyze_history(
+            history
+        )
+        issue_history = self.issue_evidence_analyzer.history_for_activity(
+            project_name,
+            activity_name,
+        )
+        return self.decision_support_analyzer.analyze(
+            trend_result,
+            risk_result,
+            forecast,
+            schedule_impact,
+            issue_history,
         )
 
     def analyze_activity_risk(

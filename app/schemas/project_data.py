@@ -366,6 +366,61 @@ class PredictiveRisk(BaseModel):
     data_note: str | None = None
 
 
+DecisionSupportStatus = Literal[
+    "supported",
+    "review_only",
+    "insufficient_evidence",
+    "not_applicable",
+]
+
+DecisionSupportPriority = Literal[
+    "none",
+    "low",
+    "medium",
+    "high",
+]
+
+DecisionSupportResponse = Literal[
+    "none",
+    "monitor",
+    "review",
+    "investigate",
+    "verify_data",
+]
+
+DecisionSupportTrigger = Literal[
+    "observed_risk",
+    "predictive_risk",
+    "schedule_impact",
+    "issue_evidence",
+    "combined_evidence",
+    "data_quality",
+    "completion",
+]
+
+
+class DecisionSupport(BaseModel):
+    """Deterministic, bounded attention guidance for one activity."""
+
+    project_name: str
+
+    activity_name: str
+
+    status: DecisionSupportStatus
+
+    priority: DecisionSupportPriority
+
+    response: DecisionSupportResponse
+
+    trigger: DecisionSupportTrigger
+
+    evidence: list[str] = Field(default_factory=list)
+
+    rationale: str
+
+    limitations: list[str] = Field(default_factory=list)
+
+
 class ForecastResult(BaseModel):
     """Deterministic activity completion estimate from observed history."""
 
