@@ -565,6 +565,18 @@ class ForecastResult(BaseModel):
     predictive_risk: PredictiveRisk | None = None
 
 
+class ActivityPredictiveSummary(BaseModel):
+    """Unified activity-level predictive product response."""
+
+    project_name: str
+
+    activity_name: str
+
+    forecast: ForecastResult
+
+    decision_support: DecisionSupport
+
+
 RiskLevel = Literal[
     "low",
     "medium",

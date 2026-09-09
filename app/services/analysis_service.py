@@ -1,6 +1,7 @@
 from fastapi import Request
 
 from app.schemas.project_data import (
+    ActivityPredictiveSummary,
     ActivityInsight,
     ActivityHistory,
     DecisionSupport,
@@ -123,11 +124,11 @@ class AnalysisService:
         )
         return composed
 
-    def analyze_activity_decision_support(
+    def analyze_activity_predictive_summary(
         self,
         project_name: str | None,
         activity_name: str,
-    ) -> DecisionSupport | None:
+    ) -> ActivityPredictiveSummary | None:
         forecast = self.analyze_activity_forecast(
             project_name,
             activity_name,
@@ -135,6 +136,27 @@ class AnalysisService:
         if forecast is None:
             return None
 
+        decision_support = self._analyze_decision_support_from_forecast(
+            project_name,
+            activity_name,
+            forecast,
+        )
+        if decision_support is None:
+            return None
+
+        return ActivityPredictiveSummary(
+            project_name=forecast.project_name,
+            activity_name=forecast.activity_name,
+            forecast=forecast,
+            decision_support=decision_support,
+        )
+
+    def _analyze_decision_support_from_forecast(
+        self,
+        project_name: str | None,
+        activity_name: str,
+        forecast: ForecastResult,
+    ) -> DecisionSupport | None:
         history = self.tracker.get_activity_history(
             project_name,
             activity_name,
@@ -157,6 +179,24 @@ class AnalysisService:
             forecast,
             schedule_impact,
             issue_history,
+        )
+
+    def analyze_activity_decision_support(
+        self,
+        project_name: str | None,
+        activity_name: str,
+    ) -> DecisionSupport | None:
+        forecast = self.analyze_activity_forecast(
+            project_name,
+            activity_name,
+        )
+        if forecast is None:
+            return None
+
+        return self._analyze_decision_support_from_forecast(
+            project_name,
+            activity_name,
+            forecast,
         )
 
     def analyze_activity_risk(

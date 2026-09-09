@@ -4,6 +4,7 @@ from app.schemas.project_data import (
     ActivityInsight,
     ActivityIssueHistory,
     ActivityHistory,
+    ActivityPredictiveSummary,
     DecisionSupport,
     ForecastResult,
     ProjectPredictiveSummary,
@@ -162,6 +163,30 @@ def get_activity_decision_support(
 ) -> DecisionSupport:
     _require_project(service, project_name)
     result = service.analyze_activity_decision_support(
+        project_name,
+        activity_name,
+    )
+
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Unknown activity: {activity_name}",
+        )
+
+    return result
+
+
+@router.get(
+    "/projects/{project_name}/activities/{activity_name}/predictive-summary",
+    response_model=ActivityPredictiveSummary,
+)
+def get_activity_predictive_summary(
+    project_name: str,
+    activity_name: str,
+    service: AnalysisService = Depends(get_analysis_service),
+) -> ActivityPredictiveSummary:
+    _require_project(service, project_name)
+    result = service.analyze_activity_predictive_summary(
         project_name,
         activity_name,
     )
