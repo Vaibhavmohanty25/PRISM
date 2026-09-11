@@ -1,0 +1,3 @@
+export function MetricCard({ label, value, detail }: { label: string; value: string | number; detail?: string }) {
+  return <article className="metric-card"><span className="eyebrow">{label}</span><strong>{value}</strong>{detail && <span className="metric-detail">{detail}</span>}</article>
+}

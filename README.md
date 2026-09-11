@@ -62,6 +62,21 @@ uvicorn app.main:app --reload
 Interactive API documentation is available at `/docs`; the OpenAPI document
 is available at `/openapi.json`.
 
+## Run the web UI
+
+In a second terminal, from the repository root:
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Open [http://localhost:5173](http://localhost:5173). The Vite development
+server proxies `/api` and `/health` to `http://127.0.0.1:8000`, so start the
+FastAPI server first. The frontend contains no credentials; extraction and
+Gemini access remain server-side.
+
 ## Configuration
 
 The following settings can be provided through environment variables or `.env`:
