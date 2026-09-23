@@ -20,20 +20,23 @@ def is_meaningful_text(
     text: str,
     minimum_characters: int = 50,
 ) -> bool:
-
     if not text:
         return False
 
     return len(text.strip()) >= minimum_characters
 
 
-def process_scanned_pdf(file_path: str) -> str:
+def process_scanned_pdf(
+    file_path: str,
+) -> str:
     """
     Convert scanned PDF pages to images
     and extract text using OCR.
     """
 
-    page_images = convert_pdf_to_images(file_path)
+    page_images = convert_pdf_to_images(
+        file_path
+    )
 
     extracted_pages = []
 
@@ -47,37 +50,51 @@ def process_scanned_pdf(file_path: str) -> str:
 
         if page_text.strip():
             extracted_pages.append(
-                f"--- Page {page_number} ---\n{page_text}"
+                (
+                    f"--- Page {page_number} ---\n"
+                    f"{page_text}"
+                )
             )
 
-    return "\n\n".join(extracted_pages)
+    return "\n\n".join(
+        extracted_pages
+    )
 
 
-def run_ai_extraction(content: str) -> dict:
+def run_ai_extraction(
+    content: str,
+) -> dict:
     """
     Convert raw document text into structured
-    infrastructure project data using Gemini.
+    infrastructure project data using Groq.
     """
 
     if not content or not content.strip():
         return {
             "status": "skipped",
-            "reason": "No text available for AI extraction",
+            "reason": (
+                "No text available for AI extraction"
+            ),
         }
 
     extraction_service = ExtractionService(
-        settings.GEMINI_API_KEY
+        api_key=settings.GROQ_API_KEY,
+        model=settings.GROQ_EXTRACTION_MODEL,
     )
 
-    result = extraction_service.extract_progress_report(
-        content
+    result = (
+        extraction_service
+        .extract_progress_report(
+            content
+        )
     )
 
     return result.model_dump()
 
 
-def process_file(file_path: str) -> dict:
-
+def process_file(
+    file_path: str,
+) -> dict:
     file_extension = os.path.splitext(
         file_path
     )[1].lower()
@@ -87,14 +104,14 @@ def process_file(file_path: str) -> dict:
     # ---------------------------------------------
 
     if file_extension == ".pdf":
-
         extracted_text = extract_pdf_text(
             file_path
         )
 
         # Digital PDF
-        if is_meaningful_text(extracted_text):
-
+        if is_meaningful_text(
+            extracted_text
+        ):
             ai_result = run_ai_extraction(
                 extracted_text
             )
@@ -109,7 +126,7 @@ def process_file(file_path: str) -> dict:
                 "extracted_data": ai_result,
             }
 
-        # Scanned PDF → OCR fallback
+        # Scanned PDF -> OCR fallback
         ocr_text = process_scanned_pdf(
             file_path
         )
@@ -132,14 +149,15 @@ def process_file(file_path: str) -> dict:
     # Image processing
     # ---------------------------------------------
 
-    elif file_extension in [
+    if file_extension in {
         ".png",
         ".jpg",
         ".jpeg",
-    ]:
-
-        extracted_text = extract_text_from_image(
-            file_path
+    }:
+        extracted_text = (
+            extract_text_from_image(
+                file_path
+            )
         )
 
         ai_result = run_ai_extraction(
@@ -158,22 +176,27 @@ def process_file(file_path: str) -> dict:
     # Excel / CSV processing
     # ---------------------------------------------
 
-    elif file_extension in [
+    if file_extension in {
         ".xlsx",
         ".xls",
         ".csv",
-    ]:
-
-        extracted_data = extract_excel_data(
-            file_path
+    }:
+        extracted_data = (
+            extract_excel_data(
+                file_path
+            )
         )
 
         return {
-            "file_type": file_extension.replace(
-                ".",
-                "",
+            "file_type": (
+                file_extension.replace(
+                    ".",
+                    "",
+                )
             ),
-            "document_type": "structured_data",
+            "document_type": (
+                "structured_data"
+            ),
             "processing_method": "pandas",
             "content": extracted_data,
         }
@@ -182,8 +205,9 @@ def process_file(file_path: str) -> dict:
     # Unsupported file
     # ---------------------------------------------
 
-    else:
-
-        raise ValueError(
-            f"Unsupported file type: {file_extension}"
+    raise ValueError(
+        (
+            "Unsupported file type: "
+            f"{file_extension}"
         )
+    )

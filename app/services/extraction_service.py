@@ -1,6 +1,7 @@
+import json
 import re
 
-from google import genai
+from groq import Groq
 
 from app.schemas.project_data import (
     ProgressReport,
@@ -18,31 +19,45 @@ from app.services.validation_service import (
 
 class ExtractionService:
 
-    def __init__(self, api_key: str):
-        self.client = genai.Client(
+    def __init__(
+        self,
+        api_key: str,
+        model: str = "openai/gpt-oss-120b",
+    ):
+        self.client = Groq(
             api_key=api_key
         )
 
+        self.model = model
+
     @staticmethod
-    def _explicit_activity_names(raw_content: str) -> list[str]:
+    def _explicit_activity_names(
+        raw_content: str,
+    ) -> list[str]:
         names = re.findall(
             r"(?im)^\s*Activity\s*:\s*(.+?)\s*$",
             raw_content,
         )
-        return list(dict.fromkeys(
-            name.strip().casefold()
-            for name in names
-            if name.strip()
-        ))
+
+        return list(
+            dict.fromkeys(
+                name.strip().casefold()
+                for name in names
+                if name.strip()
+            )
+        )
 
     @staticmethod
     def _explicit_activity_evidence(
         raw_content: str,
     ) -> dict[str, dict[str, bool]]:
-        matches = list(re.finditer(
-            r"(?im)^\s*Activity\s*:\s*(.+?)\s*$",
-            raw_content,
-        ))
+        matches = list(
+            re.finditer(
+                r"(?im)^\s*Activity\s*:\s*(.+?)\s*$",
+                raw_content,
+            )
+        )
+
         evidence = {}
 
         for index, match in enumerate(matches):
@@ -51,29 +66,52 @@ class ExtractionService:
                 if index + 1 < len(matches)
                 else len(raw_content)
             )
-            block = raw_content[match.end():block_end]
+
+            block = raw_content[
+                match.end():block_end
+            ]
+
             delay_hours = re.search(
                 r"(?i)\b(\d+(?:\.\d+)?)\s*hours?\b",
                 block,
             )
+
             positive_delay = bool(
-                delay_hours and float(delay_hours.group(1)) > 0
+                delay_hours
+                and float(
+                    delay_hours.group(1)
+                ) > 0
             )
 
-            evidence[match.group(1).strip().casefold()] = {
-                "progress": bool(re.search(
-                    r"(?i)\b\d+(?:\.\d+)?\s*(?:%|percent)\b",
-                    block,
-                )),
-                "delay_duration": bool(re.search(
-                    r"(?i)\b(?:delay|delayed)\b",
-                    block,
-                )) and delay_hours is not None,
+            evidence[
+                match.group(1).strip().casefold()
+            ] = {
+                "progress": bool(
+                    re.search(
+                        (
+                            r"(?i)\b"
+                            r"\d+(?:\.\d+)?"
+                            r"\s*(?:%|percent)\b"
+                        ),
+                        block,
+                    )
+                ),
+                "delay_duration": (
+                    bool(
+                        re.search(
+                            r"(?i)\b(?:delay|delayed)\b",
+                            block,
+                        )
+                    )
+                    and delay_hours is not None
+                ),
                 "delay_reason": positive_delay,
-                "issues": bool(re.search(
-                    r"(?im)^\s*Issue\s*:",
-                    block,
-                )),
+                "issues": bool(
+                    re.search(
+                        r"(?im)^\s*Issue\s*:",
+                        block,
+                    )
+                ),
             }
 
         return evidence
@@ -84,7 +122,11 @@ class ExtractionService:
         raw_content: str,
         ai_result: AIActivityExtraction,
     ) -> bool:
-        expected_names = cls._explicit_activity_names(raw_content)
+        expected_names = (
+            cls._explicit_activity_names(
+                raw_content
+            )
+        )
 
         if not expected_names:
             return False
@@ -102,39 +144,192 @@ class ExtractionService:
             return True
 
         actual_by_name = {
-            activity.activity_name.strip().casefold(): activity
+            activity.activity_name.strip().casefold():
+            activity
             for activity in ai_result.activities
         }
-        for name, expected_evidence in cls._explicit_activity_evidence(
-            raw_content
-        ).items():
-            activity = actual_by_name.get(name)
+
+        expected_evidence_map = (
+            cls._explicit_activity_evidence(
+                raw_content
+            )
+        )
+
+        for (
+            name,
+            expected_evidence,
+        ) in expected_evidence_map.items():
+            activity = actual_by_name.get(
+                name
+            )
+
             if activity is None:
                 return True
-            if expected_evidence["progress"] and (
-                activity.progress_percentage is None
+
+            if (
+                expected_evidence["progress"]
+                and activity.progress_percentage
+                is None
             ):
                 return True
-            if expected_evidence["delay_duration"] and (
-                activity.delay_duration_hours is None
+
+            if (
+                expected_evidence[
+                    "delay_duration"
+                ]
+                and activity.delay_duration_hours
+                is None
             ):
                 return True
-            if expected_evidence["delay_reason"] and (
-                activity.delay_reason is None
+
+            if (
+                expected_evidence[
+                    "delay_reason"
+                ]
+                and activity.delay_reason
+                is None
             ):
                 return True
-            if expected_evidence["issues"] and not activity.issues:
+
+            if (
+                expected_evidence["issues"]
+                and not activity.issues
+            ):
                 return True
 
         return False
 
+    @staticmethod
+    def _make_groq_strict_schema(
+        schema: dict,
+    ) -> dict:
+        """
+        Convert a Pydantic-generated JSON schema
+        into a schema compatible with Groq strict
+        structured outputs.
+
+        Groq strict mode requires:
+        - additionalProperties=False on every object
+        - every property listed in required
+        """
+
+        normalized_schema = json.loads(
+            json.dumps(schema)
+        )
+
+        def normalize(node):
+            if isinstance(node, dict):
+                if node.get("type") == "object":
+                    properties = node.get(
+                        "properties",
+                        {},
+                    )
+
+                    node[
+                        "additionalProperties"
+                    ] = False
+
+                    if properties:
+                        node["required"] = list(
+                            properties.keys()
+                        )
+
+                for value in node.values():
+                    normalize(value)
+
+            elif isinstance(node, list):
+                for item in node:
+                    normalize(item)
+
+        normalize(
+            normalized_schema
+        )
+
+        return normalized_schema
+
+    def _call_groq(
+        self,
+        prompt: str,
+    ) -> AIActivityExtraction:
+        """
+        Send the extraction prompt to Groq and
+        validate the structured JSON response.
+        """
+
+        schema = (
+            self._make_groq_strict_schema(
+                AIActivityExtraction
+                .model_json_schema()
+            )
+        )
+
+        response_format = {
+            "type": "json_schema",
+            "json_schema": {
+                "name": (
+                    "prism_activity_extraction"
+                ),
+                "strict": True,
+                "schema": schema,
+            },
+        }
+
+        completion = (
+            self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt,
+                    }
+                ],
+                response_format=response_format,
+                temperature=0,
+            )
+        )
+
+        if not completion.choices:
+            raise ValueError(
+                "Groq returned no completion"
+            )
+
+        content = (
+            completion
+            .choices[0]
+            .message
+            .content
+        )
+
+        if not content:
+            raise ValueError(
+                "Groq returned an empty response"
+            )
+
+        try:
+            parsed = json.loads(
+                content
+            )
+
+        except json.JSONDecodeError as exc:
+            raise ValueError(
+                "Groq returned invalid JSON"
+            ) from exc
+
+        return (
+            AIActivityExtraction
+            .model_validate(
+                parsed
+            )
+        )
+
     def extract_progress_report(
         self,
-        raw_content: str
+        raw_content: str,
     ) -> ProgressReport:
 
         # ------------------------------------------------
-        # STEP 1: Deterministic metadata extraction
+        # STEP 1:
+        # Deterministic metadata extraction
         # ------------------------------------------------
 
         metadata = extract_document_metadata(
@@ -142,7 +337,8 @@ class ExtractionService:
         )
 
         # ------------------------------------------------
-        # STEP 2: Gemini semantic extraction
+        # STEP 2:
+        # Groq semantic extraction
         # ------------------------------------------------
 
         prompt = f"""
@@ -271,7 +467,7 @@ Brick masonry work is 30 percent complete.
 
 These describe TWO different activities.
 
-The correct result MUST contain exactly TWO objects:
+The correct result MUST contain exactly TWO objects.
 
 Activity 1:
 
@@ -298,7 +494,6 @@ Activity 2:
     "delay_reason": null,
     "delay_duration_hours": null
 }}
-
 
 IMPORTANT:
 
@@ -436,17 +631,59 @@ Extract progress only when explicitly stated.
 Examples:
 
 "70 percent complete."
-→ progress_percentage = 70
+-> progress_percentage = 70
 
 "70% complete."
-→ progress_percentage = 70
+-> progress_percentage = 70
 
 "60 percent completion."
-→ progress_percentage = 60
+-> progress_percentage = 60
 
 If no explicit progress percentage exists:
 
-→ progress_percentage = null
+-> progress_percentage = null
+
+
+========================================================
+CURRENT VS PREVIOUS PROGRESS RULE
+========================================================
+
+A construction report may include both previous
+and current progress.
+
+If the source explicitly labels values as
+Previous Progress and Current Progress:
+
+- use Current Progress as progress_percentage
+- do NOT use Previous Progress as the current value
+
+Example:
+
+Activity: Foundation Work
+Previous Progress: 20%
+Current Progress: 40%
+
+Return:
+
+progress_percentage = 40
+
+If a table contains:
+
+Activity
+Previous Progress
+Current Progress
+Status
+
+Foundation Work
+20%
+40%
+In Progress
+
+Then:
+
+activity_name = "Foundation Work"
+progress_percentage = 40
+status = "In Progress"
 
 
 ========================================================
@@ -462,11 +699,11 @@ Examples:
 "currently in progress"
 "remains in progress"
 
-→ status = "In Progress"
+-> status = "In Progress"
 
 If the source does not explicitly state the status:
 
-→ status = null
+-> status = null
 
 Never infer status from progress percentage.
 
@@ -487,7 +724,6 @@ Return:
 delay_reason = "equipment failure"
 delay_duration_hours = 5
 
-
 Example:
 
 "Heavy rainfall delayed the work by 3 hours."
@@ -496,7 +732,6 @@ Return:
 
 delay_reason = "Heavy rainfall"
 delay_duration_hours = 3
-
 
 If no explicit delay exists:
 
@@ -647,10 +882,13 @@ EXAMPLE 4:
 
 Input:
 
-Structural steel installation reached 60 percent completion.
+Structural steel installation reached
+60 percent completion.
+
 45 tonnes of steel were installed.
 
-Work was delayed by 5 hours because of equipment failure.
+Work was delayed by 5 hours because of
+equipment failure.
 
 Steel installation remains in progress.
 
@@ -698,9 +936,12 @@ Before returning the JSON, verify:
 
 12. The response matches the requested schema.
 
-13. For each activity, map every explicit progress, delay, and issue
-    statement from that activity's source block into the corresponding
-    fields. Use null or [] only when that evidence is absent.
+13. For each activity, map every explicit progress,
+    delay, status, and issue statement into the
+    corresponding fields.
+
+14. When both previous and current progress appear,
+    use the explicitly identified current progress.
 
 
 ========================================================
@@ -715,71 +956,68 @@ SOURCE DOCUMENT
 """
 
         # ------------------------------------------------
-        # STEP 3: Call Gemini
+        # STEP 3:
+        # Call Groq
         # ------------------------------------------------
 
-        response_format = {
-            "type": "text",
-            "mime_type": "application/json",
-            "schema": AIActivityExtraction.model_json_schema(),
-        }
-
-        interaction = self.client.interactions.create(
-            model="gemini-3.6-flash",
-            input=prompt,
-            response_format=response_format,
-            generation_config={"temperature": 0},
+        ai_result = self._call_groq(
+            prompt
         )
 
         # ------------------------------------------------
-        # STEP 4: Validate Gemini response
+        # STEP 4:
+        # Validate response completeness
         # ------------------------------------------------
 
-        if not interaction.output_text:
-            raise ValueError(
-                "Gemini returned an empty response"
-            )
-
-        ai_result = (
-            AIActivityExtraction.model_validate_json(
-                interaction.output_text
-            )
-        )
-
-        if self._response_is_incomplete(raw_content, ai_result):
+        if self._response_is_incomplete(
+            raw_content,
+            ai_result,
+        ):
             retry_prompt = f"""
-The previous extraction was incomplete. Re-read the SOURCE DOCUMENT and
-return one object for EVERY activity explicitly identified in the source.
-Do not omit activities, even when their fields are null. Map every explicit
-progress, delay, and issue statement from each activity block. Preserve all
-activity-specific evidence and use null or [] only when evidence is absent.
+The previous extraction was incomplete.
+
+Re-read the SOURCE DOCUMENT and return one object
+for EVERY activity explicitly identified in the
+source.
+
+Do not omit activities even when their fields are
+null.
+
+Map every explicit progress, delay, status, and
+issue statement from each activity.
+
+When both previous and current progress values are
+present, use the explicitly identified CURRENT
+progress value.
+
+Preserve all activity-specific evidence.
+
+Use null or [] only when evidence is absent.
+
 Return only JSON matching the requested schema.
+
 
 {prompt}
 """
-            retry_interaction = self.client.interactions.create(
-                model="gemini-3.6-flash",
-                input=retry_prompt,
-                response_format=response_format,
-                generation_config={"temperature": 0},
+
+            ai_result = self._call_groq(
+                retry_prompt
             )
 
-            if not retry_interaction.output_text:
+            if self._response_is_incomplete(
+                raw_content,
+                ai_result,
+            ):
                 raise ValueError(
-                    "Gemini returned an empty recovery response"
-                )
-
-            ai_result = AIActivityExtraction.model_validate_json(
-                retry_interaction.output_text
-            )
-
-            if self._response_is_incomplete(raw_content, ai_result):
-                raise ValueError(
-                    "Gemini returned an incomplete activity extraction"
+                    (
+                        "Groq returned an incomplete "
+                        "activity extraction"
+                    )
                 )
 
         # ------------------------------------------------
-        # STEP 5: Build final ProgressReport
+        # STEP 5:
+        # Build final ProgressReport
         # ------------------------------------------------
 
         report = ProgressReport(
@@ -796,18 +1034,21 @@ Return only JSON matching the requested schema.
                 "location"
             ),
             activities=ai_result.activities,
-            general_issues=ai_result.general_issues,
+            general_issues=(
+                ai_result.general_issues
+            ),
             extraction_metadata={
                 "source_type": "document",
                 "processing_method": (
-                    "gemini_structured_extraction"
+                    "groq_structured_extraction"
                 ),
                 "confidence_score": None,
             },
         )
 
         # ------------------------------------------------
-        # STEP 6: Validate and normalize
+        # STEP 6:
+        # Validate and normalize
         # ------------------------------------------------
 
         return validate_progress_report(

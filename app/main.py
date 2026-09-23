@@ -2,9 +2,20 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from app.api.routes.agent import router as agent_router
+from groq import Groq
 
+from app.agents.groq_adapter import GroqLLMAdapter
 from app.api.analysis import router as analysis_router
 from app.api.upload import router as upload_router
+
+from app.agents.agent import ConstructionIntelligenceAgent
+
+from app.agents.tool_registry import ToolRegistry
+from app.agents.tools import PrismAgentTools
+
+from app.core.config import settings
+
 from app.services.analysis_service import AnalysisService
 from app.schemas.api import ErrorResponse, HealthResponse, RootResponse
 
@@ -12,13 +23,53 @@ from app.schemas.api import ErrorResponse, HealthResponse, RootResponse
 app = FastAPI(
     title="PRISM API",
     description="Project Reality Intelligence & Schedule Mapping",
-    version="0.1.0"
+    version="0.1.0",
 )
 
 
 app.include_router(upload_router)
 app.include_router(analysis_router)
-app.state.analysis_service = AnalysisService()
+app.include_router(
+    agent_router,
+    prefix="/api/v1",
+)
+
+
+# ---------------------------------------------------------------------
+# Shared application services
+# ---------------------------------------------------------------------
+
+analysis_service = AnalysisService()
+
+agent_tools = PrismAgentTools(
+    analysis_service
+)
+
+tool_registry = ToolRegistry(
+    agent_tools
+)
+
+groq_client = Groq(
+    api_key=settings.GROQ_API_KEY
+)
+
+groq_adapter = GroqLLMAdapter(
+    client=groq_client,
+    model=settings.GROQ_AGENT_MODEL,
+)
+
+construction_agent = ConstructionIntelligenceAgent(
+    llm=groq_adapter,
+    registry=tool_registry,
+)
+
+# ---------------------------------------------------------------------
+# FastAPI application state
+# ---------------------------------------------------------------------
+
+app.state.analysis_service = analysis_service
+app.state.agent = construction_agent
+
 
 @app.get("/", response_model=RootResponse)
 def root() -> RootResponse:
@@ -37,7 +88,10 @@ def health_check() -> HealthResponse:
 
 def _error_payload(code: str, message: str) -> dict:
     return ErrorResponse(
-        error={"code": code, "message": message}
+        error={
+            "code": code,
+            "message": message,
+        }
     ).model_dump()
 
 
@@ -47,20 +101,26 @@ async def request_validation_exception_handler(
     exc: RequestValidationError,
 ) -> JSONResponse:
     del request
+
     missing_file = any(
         error.get("loc", ())[-1:] == ("file",)
         and error.get("type") == "missing"
         for error in exc.errors()
     )
+
     if missing_file:
         code = "missing_file"
         message = "An upload file is required"
     else:
         code = "invalid_request"
         message = "Request validation failed"
+
     return JSONResponse(
         status_code=400,
-        content=_error_payload(code, message),
+        content=_error_payload(
+            code,
+            message,
+        ),
     )
 
 
@@ -70,19 +130,39 @@ async def http_exception_handler(
     exc: StarletteHTTPException,
 ) -> JSONResponse:
     del request
+
     detail = exc.detail
+
     if isinstance(detail, dict):
-        code = detail.get("code", "http_error")
-        message = detail.get("message", "Request failed")
+        code = detail.get(
+            "code",
+            "http_error",
+        )
+        message = detail.get(
+            "message",
+            "Request failed",
+        )
+
     else:
         message = str(detail)
-        if message.startswith("Unknown project:"):
+
+        if message.startswith(
+            "Unknown project:"
+        ):
             code = "project_not_found"
-        elif message.startswith("Unknown activity:"):
+
+        elif message.startswith(
+            "Unknown activity:"
+        ):
             code = "activity_not_found"
+
         else:
             code = "http_error"
+
     return JSONResponse(
         status_code=exc.status_code,
-        content=_error_payload(code, message),
+        content=_error_payload(
+            code,
+            message,
+        ),
     )
