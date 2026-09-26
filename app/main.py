@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.api.routes.agent import router as agent_router
 from groq import Groq
-
+from fastapi.middleware.cors import CORSMiddleware
 from app.agents.groq_adapter import GroqLLMAdapter
 from app.api.analysis import router as analysis_router
 from app.api.upload import router as upload_router
@@ -24,6 +24,17 @@ app = FastAPI(
     title="PRISM API",
     description="Project Reality Intelligence & Schedule Mapping",
     version="0.1.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
